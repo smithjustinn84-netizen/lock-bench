@@ -3,13 +3,12 @@ package com.lockpicking.bench.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,7 +16,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -30,12 +28,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
+import com.lockpicking.bench.domain.bench.Keyway
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinState
@@ -46,14 +44,20 @@ import com.lockpicking.bench.ui.theme.BenchType
 private const val PULSE_MILLIS = 520
 
 /**
- * A to-scale section through the pin stacks with the shear line drawn across it.
+ * The pick pad: a to-scale section through the pin stacks with the shear line drawn across it
+ * and the pick underneath, where the thumb that works it rests.
  *
- * It reads pin travel straight from [pins] in the draw phase, keyed on [motionTick], so a
- * moving pin repaints this canvas without recomposing anything. Tapping a column nudges that
- * pin, which keeps the lock pickable from camera angles where the pins are hidden.
+ * The keyway runs across the pad, mouth on the left. Sliding a thumb across moves the pick
+ * along it; sliding up lifts the tip. The pad takes no touches itself: they fall through to
+ * the 3D view, whose router knows where the pad is, so that this thumb and the one on the
+ * wrench can be down together.
+ *
+ * It reads pin travel straight from [pins], and the tip from [pickZ] and [pickY], in the draw
+ * phase, keyed on [motionTick], so a moving pin repaints this canvas without recomposing
+ * anything.
  */
 @Composable
-fun ShearLineIndicator(
+fun PickPad(
   geometry: LockGeometry,
   pins: LockReadout,
   motionTick: State<Int>,
@@ -62,7 +66,8 @@ fun ShearLineIndicator(
   opened: Boolean,
   bindingPin: Int,
   selectedPin: Int,
-  onNudge: (Int) -> Unit,
+  pickZ: () -> Float,
+  pickY: () -> Float,
   modifier: Modifier = Modifier,
 ) {
   val pulse = remember { Animatable(0f) }
@@ -77,44 +82,59 @@ fun ShearLineIndicator(
     }
   }
   val count = pins.pinCount
-  val currentOnNudge = rememberUpdatedState(onNudge)
-  val description = stringResource(R.string.cd_pin_stacks)
-  Panel(modifier) {
-    Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 6.dp)) {
+  val keyway = remember(geometry) { Keyway(geometry) }
+  val description = stringResource(R.string.cd_pick_pad)
+  Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }) {
+    Column(Modifier.padding(horizontal = PickPadInset, vertical = 8.dp)) {
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.shear_line_title), style = BenchType.Label, color = BenchColors.Dim)
+        Text(stringResource(R.string.pick_title), style = BenchType.Label, color = BenchColors.Dim)
         Text(
           stringResource(R.string.shear_line_count, setCount, count),
           style = BenchType.Label,
           color = if (opened) BenchColors.Set else BenchColors.Brass,
         )
       }
-      Canvas(
-        Modifier
-          .fillMaxWidth()
-          .height(112.dp)
-          .padding(top = 4.dp)
-          .semantics { contentDescription = description }
-          .pointerInput(count) {
-            detectTapGestures { tap ->
-              currentOnNudge.value((tap.x / (size.width / count.toFloat())).toInt().coerceIn(0, count - 1))
-            }
-          },
-      ) {
-        motionTick.value // read here so pin motion invalidates the draw, not the composition
+      Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
+        motionTick.value // read here so pin and pick motion invalidates the draw, not the composition
         val scale = StackScale(geometry, size.height - 14.dp.toPx())
+        drawLands(geometry, scale)
         for (i in 0 until count) {
-          drawPinStack(i, geometry, pins, scale, isBinding = i == bindingPin, isSelected = i == selectedPin)
+          val cx = size.width * keyway.depthOf(i)
+          drawPinStack(i, cx, geometry, pins, scale, isBinding = i == bindingPin, isSelected = i == selectedPin)
         }
         drawShearLine(scale.y(geometry.shearY), opened, pulse.value)
+        val z = pickZ()
+        if (keyway.contains(z)) drawPick(size.width * keyway.depthAt(z), scale.y(pickY()), scale)
       }
     }
   }
 }
 
+/** The padding either side of the pad's drawing, which the thumb's travel is measured across. */
+val PickPadInset = 10.dp
+
+/** The plug's metal between the chambers: what the tip knocks on when it is lifted in the wrong place. */
+private fun DrawScope.drawLands(geometry: LockGeometry, scale: StackScale) {
+  val top = scale.y(geometry.shearY)
+  val bottom = scale.y(geometry.pinRestY + Keyway.LAND_CLEARANCE)
+  drawRect(BenchColors.Hairline.copy(alpha = 0.45f), Offset(0f, top), Size(size.width, bottom - top))
+  drawLine(BenchColors.Dim, Offset(0f, bottom), Offset(size.width, bottom), strokeWidth = 1.dp.toPx())
+}
+
+/** The hook pick, in from the mouth on the left, with its tip at ([tipX], [tipY]). */
+private fun DrawScope.drawPick(tipX: Float, tipY: Float, scale: StackScale) {
+  val hook = 0.012f * scale.unit
+  val shaftY = tipY + hook
+  val stroke = 2.5.dp.toPx()
+  drawLine(BenchColors.Nickel, Offset(-stroke, shaftY), Offset(tipX, shaftY), strokeWidth = stroke, cap = StrokeCap.Round)
+  drawLine(BenchColors.Nickel, Offset(tipX, shaftY), Offset(tipX, tipY), strokeWidth = stroke, cap = StrokeCap.Round)
+  drawCircle(BenchColors.Text, radius = 2.dp.toPx(), center = Offset(tipX, tipY))
+}
+
 /** Model Y to canvas Y. The stacks are drawn at their true proportions. */
 private class StackScale(geometry: LockGeometry, private val drawable: Float) {
-  private val bottom = geometry.pinRestY - 0.006f
+  // Room under the pin tips for the keyway and the pick in it.
+  private val bottom = geometry.pinRestY - 0.034f
   private val top = geometry.chamberTop + 0.004f
 
   /** Canvas pixels per model unit. */
@@ -125,6 +145,7 @@ private class StackScale(geometry: LockGeometry, private val drawable: Float) {
 
 private fun DrawScope.drawPinStack(
   i: Int,
+  cx: Float,
   geometry: LockGeometry,
   pins: LockReadout,
   scale: StackScale,
@@ -133,9 +154,7 @@ private fun DrawScope.drawPinStack(
 ) {
   val spec = pins.pin(i)
   val state = pins.state(i)
-  val column = size.width / pins.pinCount
   val pinWidth = 0.032f * scale.unit
-  val cx = column * (i + 0.5f)
   val left = cx - pinWidth / 2f
   // In a false set the turned plug has carried the foot of the driver sideways.
   val cocked = pins.driverTilt(i) * pinWidth * 0.16f

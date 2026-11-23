@@ -7,9 +7,6 @@ import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinSpec
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.RigPose
-import io.github.sceneview.collision.Box
-import io.github.sceneview.collision.HitResult
-import io.github.sceneview.collision.Vector3
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Scale
@@ -129,22 +126,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private val appliedSpring = FloatArray(PIN_COUNT) { Float.NaN }
 
   init {
-    // A pin is a 3 mm target; give each stack a box the size of its whole chamber to hit.
-    // The boxes tile along Z without overlapping, so the nearest hit is the pin under the finger.
-    for (key in keyPins) {
-      key.node.collisionShape = Box(Vector3(0.060f, 0.300f, 0.042f), Vector3(0f, 0.130f, 0f))
-    }
     Log.i(TAG, "bound ${byName.size} nodes: $nodeNames")
     if (missing.isNotEmpty()) Log.e(TAG, "model is missing required nodes: $missing")
-  }
-
-  /** The 0-based pin a ray hit, nearest first, or -1. */
-  fun pinAt(hits: List<HitResult>): Int {
-    for (hit in hits) {
-      val index = keyPins.indexOfFirst { it.node === hit.nodeOrNull }
-      if (index >= 0) return index
-    }
-    return -1
   }
 
   /**

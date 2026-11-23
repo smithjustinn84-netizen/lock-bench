@@ -11,7 +11,7 @@ import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.FrameClock
 import com.lockpicking.bench.domain.motion.RigPose
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
-import com.lockpicking.bench.ui.bench.input.PinInput
+import com.lockpicking.bench.ui.bench.input.PickInput
 import com.lockpicking.bench.ui.bench.input.WrenchInput
 import com.lockpicking.bench.ui.bench.scene.BenchSceneHost
 import kotlinx.coroutines.CancellationException
@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
  */
 class LockBenchViewModel(
   private val assets: LockAssetRepository,
-) : ViewModel(), PinInput, WrenchInput, BenchSceneHost {
+) : ViewModel(), PickInput, WrenchInput, BenchSceneHost {
 
   private val _uiState = MutableStateFlow(BenchUiState())
   val uiState: StateFlow<BenchUiState> = _uiState.asStateFlow()
@@ -55,7 +55,8 @@ class LockBenchViewModel(
   private val _textures = MutableSharedFlow<LockFeedback>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
   /**
-   * The scrape of a binding pin, which comes in a stream while it is being lifted. Kept apart
+   * What the pick's tip drags over: a binding pin scraping up, a spring giving, a land sliding
+   * past. These come in a stream while the pick moves. Kept apart
    * from [events] and allowed to drop, so a burst of texture can never hold up or push out a set.
    */
   val textures: SharedFlow<LockFeedback> = _textures.asSharedFlow()
@@ -144,17 +145,21 @@ class LockBenchViewModel(
     )
   }
 
-  // ── Pin input ───────────────────────────────────────────────────────────────────────────────
+  // ── Pick input ──────────────────────────────────────────────────────────────────────────────
 
-  override val acceptsPins: Boolean get() = simulation?.isOpen == false
+  override val pickDepth: Float get() = simulation?.pickDepthNow ?: 0f
 
-  override fun onPinPressed(pin: Int) = act { hold(pin, 0f) }
+  override fun onPickMoved(depth: Float, lift: Float) = act { movePick(depth, lift * liftRange) }
 
-  override fun onPinDragged(pin: Int, fraction: Float) = act { hold(pin, fraction * maxLift(pin)) }
+  override fun onPickRested() = act { letGo() }
 
-  override fun onPinReleased() = act { letGo() }
+  override fun onPickTapped(across: Float) {
+    val count = simulation?.geometry?.pinCount ?: return
+    onPinTapped((across * count).toInt().coerceIn(0, count - 1))
+  }
 
-  override fun onPinTapped(pin: Int) = act { nudge(pin) }
+  /** The beginner's shortcut: the pick goes to [pin], lifts it exactly to the shear line, and lets go. */
+  fun onPinTapped(pin: Int) = act { nudge(pin) }
 
   // ── Wrench input ────────────────────────────────────────────────────────────────────────────
 
@@ -165,6 +170,8 @@ class LockBenchViewModel(
   // ── Controls ────────────────────────────────────────────────────────────────────────────────
 
   fun onHintsToggled() = _uiState.update { it.copy(hints = !it.hints) }
+
+  fun onHandsSwapped() = _uiState.update { it.copy(swapHands = !it.swapHands) }
 
   fun onReset() = act { reset() }
 
@@ -198,7 +205,8 @@ class LockBenchViewModel(
 
   private fun emit(event: LockEvent) {
     val feedback = LockFeedback(event, simulation?.pose?.torque ?: 0f)
-    if (event is LockEvent.Grit) _textures.tryEmit(feedback) else _events.trySend(feedback)
+    val texture = event is LockEvent.Grit || event is LockEvent.SpringTick || event === LockEvent.WardScrape
+    if (texture) _textures.tryEmit(feedback) else _events.trySend(feedback)
   }
 
   private fun wake() {

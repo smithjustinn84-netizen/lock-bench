@@ -2,6 +2,7 @@ package com.lockpicking.bench.domain.bench
 
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
+import com.lockpicking.bench.domain.lock.PinFeel
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.testing.testGeometry
@@ -15,8 +16,20 @@ class BenchSimulationTest {
   private val events = mutableListOf<LockEvent>()
   private val sim = BenchSimulation(testGeometry) { events += it }
 
-  /** The events that mark something happening, without the scrape of a pin being lifted. */
-  private val milestones get() = events.filterNot { it is LockEvent.Grit }
+  /** The events that mark something happening in the lock, without what the hands only feel on the way. */
+  private val milestones get() = events.filterNot {
+    it is LockEvent.Grit || it is LockEvent.SpringTick || it is LockEvent.TensionBite || it is LockEvent.PinTouched ||
+      it == LockEvent.WardScrape
+  }
+
+  /** Slides the pick from one depth to another over [frames], with the tip held at [lift]. */
+  private fun slide(from: Float, to: Float, lift: Float = 0f, frames: Int = 60) {
+    for (frame in 1..frames) {
+      sim.movePick(from + (to - from) * frame / frames, lift)
+      sim.advance(FRAME)
+    }
+    settle()
+  }
 
   /** Steps at 60 fps until nothing moves. Fails if the bench never settles. */
   private fun settle() {
@@ -272,6 +285,122 @@ class BenchSimulationTest {
     settle()
     assertEquals(testGeometry.pickParkedZ, sim.pose.pickZ, 0f)
     assertEquals(testGeometry.pickParkedY, sim.pose.pickY, 0f)
+  }
+
+  // ── The keyway ──────────────────────────────────────────────────────────────────────────────
+
+  @Test
+  fun `sliding the pick down the keyway touches each pin in turn`() {
+    slide(0f, 1f)
+    // The test lock's keyway runs from pin 4 at the mouth back to pin 1.
+    assertEquals(listOf(3, 2, 1, 0), events.filterIsInstance<LockEvent.PinTouched>().map { it.pin })
+    assertTrue("with no tension nothing binds", events.filterIsInstance<LockEvent.PinTouched>().all { it.feel == PinFeel.Springy })
+    assertTrue("a tip that is not lifted knocks on nothing", events.none { it == LockEvent.WardHit })
+  }
+
+  @Test
+  fun `the pin that is binding pushes back when the tip finds it`() {
+    pull(0.5f)
+    val binding = sim.snapshot().bindingPin
+    slide(0f, 1f)
+    val touches = events.filterIsInstance<LockEvent.PinTouched>()
+    assertEquals(PinFeel.Binding, touches.single { it.pin == binding }.feel)
+    assertTrue(touches.filter { it.pin != binding }.all { it.feel == PinFeel.Springy })
+  }
+
+  @Test
+  fun `the pin under the tip is the one selected, and between pins none is`() {
+    sim.hold(2, 0f)
+    settle()
+    assertEquals(2, sim.snapshot().selectedPin)
+    sim.movePick((sim.keyway.depthOf(2) + sim.keyway.depthOf(1)) / 2f, 0f)
+    settle()
+    assertEquals(-1, sim.snapshot().selectedPin)
+  }
+
+  @Test
+  fun `lifting between two pins knocks on the land and goes no higher`() {
+    val land = (sim.keyway.depthOf(2) + sim.keyway.depthOf(1)) / 2f
+    sim.movePick(land, 0f)
+    settle()
+    events.clear()
+    sim.movePick(land, 0.03f)
+    settle()
+    sim.movePick(land, 0.04f)
+    settle()
+    assertEquals("said once per knock", listOf<LockEvent>(LockEvent.WardHit), events)
+    assertEquals(testGeometry.pinRestY - 0.002f + Keyway.LAND_CLEARANCE, sim.pose.pickY, 1e-4f)
+    assertTrue("no pin was moved", (0 until testGeometry.pinCount).all { sim.readout.keyLift(it) == 0f })
+    // Relax and lift again: it knocks again.
+    sim.movePick(land, 0f)
+    settle()
+    sim.movePick(land, 0.03f)
+    settle()
+    assertEquals(2, events.count { it == LockEvent.WardHit })
+  }
+
+  @Test
+  fun `dragging a lifted pick over the pins scrapes on the lands without a fresh knock at each`() {
+    sim.hold(3, 0f)
+    settle()
+    events.clear()
+    slide(sim.keyway.depthOf(3), sim.keyway.depthOf(0), lift = 0.02f, frames = 120)
+    assertTrue(events.any { it == LockEvent.WardScrape })
+    assertTrue("the tip rides from pin to land: it is not driven up into it", events.none { it == LockEvent.WardHit })
+    assertEquals("and each pin is felt as it comes", listOf(2, 1, 0), events.filterIsInstance<LockEvent.PinTouched>().map { it.pin })
+  }
+
+  @Test
+  fun `raking a lifted pick under tension sets the binding pin when the tip gets to it`() {
+    pull(0.5f)
+    val binding = sim.snapshot().bindingPin
+    val shear = testGeometry.pinSpecs[binding].liftToShear
+    slide(0f, sim.keyway.depthOf(binding), lift = shear, frames = 90)
+    assertEquals(PinState.Set, sim.readout.state(binding))
+  }
+
+  @Test
+  fun `the ends of the keyway are felt once each time the pick is pushed into them`() {
+    sim.movePick(0.9f, 0f)
+    settle()
+    sim.movePick(1.05f, 0f)
+    sim.movePick(1.06f, 0f)
+    assertEquals(1, events.count { it == LockEvent.KeywayEnd })
+    assertEquals(1f, sim.pickDepthNow, 0f)
+    sim.movePick(0.9f, 0f)
+    sim.movePick(1.05f, 0f)
+    assertEquals(2, events.count { it == LockEvent.KeywayEnd })
+    sim.movePick(-0.05f, 0f)
+    assertEquals(3, events.count { it == LockEvent.KeywayEnd })
+  }
+
+  @Test
+  fun `a relaxed hand drops the tip but leaves the pick where it is`() {
+    sim.hold(1, 0.02f)
+    settle()
+    assertEquals(0.02f, sim.readout.keyLift(1), 1e-4f)
+    sim.letGo()
+    settle()
+    assertEquals(0f, sim.readout.keyLift(1), 0f)
+    assertEquals(sim.keyway.depthOf(1), sim.pickDepthNow, 0f)
+    assertEquals(testGeometry.pinZ[1], sim.pose.pickZ, 1e-4f)
+    assertEquals(1, sim.snapshot().selectedPin)
+  }
+
+  @Test
+  fun `the lock opens with nothing but a wrench and a pick moved by hand`() {
+    pull(EASED)
+    repeat(2 * testGeometry.pinCount) {
+      val binding = sim.snapshot().bindingPin
+      if (binding < 0) return@repeat
+      slide(sim.pickDepthNow, sim.keyway.depthOf(binding), frames = 20)
+      sim.movePick(sim.pickDepthNow, testGeometry.pinSpecs[binding].liftToShear + 0.002f)
+      settle()
+      sim.letGo()
+      settle()
+    }
+    assertTrue(sim.snapshot().opened)
+    assertEquals(LockEvent.Opened, milestones.last())
   }
 
   @Test

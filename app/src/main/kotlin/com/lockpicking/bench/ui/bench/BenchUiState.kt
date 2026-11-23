@@ -31,7 +31,10 @@ data class BenchUiState(
   val setPulse: Int = 0,
   val explode: Float = 0f,
   val ghost: Boolean = false,
-  val preset: CameraPreset = CameraPreset.Isometric,
+  /** Tension under the right thumb and the pick under the left, for a left-handed picker. */
+  val swapHands: Boolean = false,
+  /** From the side the keyway runs across the screen, the way the pick pad does. */
+  val preset: CameraPreset = CameraPreset.ShearSide,
   /** Bumped on every preset tap, so re-tapping the current one snaps an orbited camera back. */
   val presetResetKey: Int = 0,
 ) {

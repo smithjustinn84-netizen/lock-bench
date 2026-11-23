@@ -32,15 +32,15 @@ class LockHaptics(context: Context) {
     vibrator!!.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_THUD, VibrationEffect.Composition.PRIMITIVE_LOW_TICK)
   private val amplitude = vibrator?.hasAmplitudeControl() == true
 
-  private var lastGrain = 0L
+  private var lastTexture = 0L
 
   fun play(haptic: Haptic, strength: Float) {
     val vibrator = vibrator ?: return
-    if (haptic == Haptic.Grain) {
+    if (haptic.isTexture) {
       // A texture, not a string of events: closer together than this it turns into a buzz.
       val now = SystemClock.uptimeMillis()
-      if (now - lastGrain < GRAIN_GAP_MILLIS) return
-      lastGrain = now
+      if (now - lastTexture < TEXTURE_GAP_MILLIS) return
+      lastTexture = now
     }
     val level = strength.coerceIn(0.05f, 1f)
     val effect = if (primitives) composed(haptic, level) else pulsed(haptic, level)
@@ -71,6 +71,11 @@ class LockHaptics(context: Context) {
         .addPrimitive(tick, level * 0.6f, 33)
         .addPrimitive(tick, level * 0.45f, 44)
       Haptic.Release -> composition.addPrimitive(click, level * 0.7f).addPrimitive(thud, level, 110)
+      Haptic.Bump -> composition.addPrimitive(low, level)
+      // The tick sharpens the front of the click: metal on metal, with no give in it.
+      Haptic.Knock -> composition.addPrimitive(tick, level).addPrimitive(click, level, 0)
+      Haptic.Scrape -> composition.addPrimitive(tick, level)
+      Haptic.Spring -> composition.addPrimitive(low, level)
     }
     return composition.compose()
   }
@@ -90,10 +95,14 @@ class LockHaptics(context: Context) {
       Haptic.Refuse -> pattern(0, 22, 60, 18)
       Haptic.Rattle -> pattern(0, 7, 20, 7, 30, 6, 40, 5)
       Haptic.Release -> pattern(0, 12, 100, 30)
+      Haptic.Bump -> VibrationEffect.createOneShot(9, strength)
+      Haptic.Knock -> VibrationEffect.createOneShot(16, strength)
+      Haptic.Scrape -> VibrationEffect.createOneShot(6, strength)
+      Haptic.Spring -> VibrationEffect.createOneShot(4, strength)
     }
   }
 
   private companion object {
-    const val GRAIN_GAP_MILLIS = 30L
+    const val TEXTURE_GAP_MILLIS = 30L
   }
 }

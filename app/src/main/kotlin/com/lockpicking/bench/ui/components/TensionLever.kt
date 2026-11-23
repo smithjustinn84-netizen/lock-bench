@@ -10,6 +10,7 @@ import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -55,9 +56,10 @@ private const val DIAL_SWEEP_DEGREES = 110f
  * seizes. The dial's needle is the plug: it steps round on each set, swings well over on a
  * false set, and kicks back as a spool is worked out of one.
  *
- * This draws the lever and takes no touches. Touches fall through to the 3D view, whose router
- * knows where the lever is: that is the only way a thumb here and a finger on a pin can be
- * down at the same time. [torque] and [plugDegrees] are read in the draw phase, keyed on
+ * The whole panel is the tension zone: a thumb anywhere on it is a hand on the wrench, and the
+ * pull is measured from where it lands. This draws the lever and takes no touches. Touches
+ * fall through to the 3D view, whose router knows where the zone is: that is the only way a
+ * thumb here and a thumb on the pick pad can be down at the same time. [torque] and [plugDegrees] are read in the draw phase, keyed on
  * [motionTick], so a moving wrench repaints this canvas without recomposing anything.
  */
 @Composable
@@ -69,7 +71,7 @@ fun TensionLever(
   modifier: Modifier = Modifier,
 ) {
   val description = stringResource(R.string.cd_wrench)
-  Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }) {
+  Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
     Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 8.dp).width(GaugeWidth)) {
       Text(stringResource(R.string.wrench_title), style = BenchType.Label, color = BenchColors.Dim)
       Canvas(

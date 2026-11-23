@@ -21,19 +21,21 @@ import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 
-/** The bottom panel: explode slider, the bench toggles, and the camera presets. */
+/** The bench drawer: explode slider, the bench toggles, the camera presets, and which hand does what. */
 @Composable
 fun ControlBar(
   explode: Float,
   exploded: Boolean,
   hints: Boolean,
   ghost: Boolean,
+  swapHands: Boolean,
   preset: CameraPreset,
   onExplodeChange: (Float) -> Unit,
   onExplodedToggle: () -> Unit,
   onHintsToggle: () -> Unit,
   onGhostToggle: () -> Unit,
   onReset: () -> Unit,
+  onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -50,6 +52,7 @@ fun ControlBar(
         CameraPreset.entries.forEach { option ->
           BenchButton(stringResource(option.label), selected = option == preset) { onPreset(option) }
         }
+        BenchToggle(stringResource(R.string.control_swap), swapHands, onClick = onSwapHands)
       }
     }
   }

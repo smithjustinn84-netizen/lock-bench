@@ -2,6 +2,7 @@ package com.lockpicking.bench.ui.bench.feedback
 
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
+import com.lockpicking.bench.domain.lock.PinFeel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -56,5 +57,37 @@ class FeedbackTest {
       }
     }
     assertNull("the shackle closing is heard, not felt", cueFor(LockEvent.Relocked, 0f).haptic)
+  }
+
+  @Test
+  fun `the tip finds the binding pin by how hard it pushes back`() {
+    val binding = cueFor(LockEvent.PinTouched(0, PinFeel.Binding), 0.4f)
+    val springy = cueFor(LockEvent.PinTouched(1, PinFeel.Springy), 0.4f)
+    val loose = cueFor(LockEvent.PinTouched(2, PinFeel.Loose), 0.4f)
+    assertTrue(listOf(binding, springy, loose).all { it.haptic == Haptic.Bump })
+    assertTrue(binding.strength > springy.strength * 1.5f)
+    assertTrue(springy.strength > loose.strength * 1.5f)
+    assertTrue(cueFor(LockEvent.PinTouched(0, PinFeel.Binding), 0.7f).strength > binding.strength)
+  }
+
+  @Test
+  fun `metal is a knock, a spring is barely there, and neither is a set`() {
+    val ward = cueFor(LockEvent.WardHit, 0.4f)
+    val stop = cueFor(LockEvent.HardStop(0), 0.4f)
+    val spring = cueFor(LockEvent.SpringTick(0, 0.5f), 0.4f)
+    assertEquals(Haptic.Knock, ward.haptic)
+    assertEquals(Haptic.Knock, stop.haptic)
+    assertTrue(ward.strength >= stop.strength)
+    assertEquals(Haptic.Spring, spring.haptic)
+    assertNull("a spring giving makes no sound", spring.sound)
+    assertTrue(spring.strength < 0.5f)
+    assertTrue(cueFor(LockEvent.SpringTick(0, 0.9f), 0.4f).strength > spring.strength)
+  }
+
+  @Test
+  fun `what the tip drags over is a texture`() {
+    val textures = listOf(LockEvent.Grit(0), LockEvent.SpringTick(0, 0.5f), LockEvent.WardScrape)
+    assertTrue(textures.all { cueFor(it, 0.4f).haptic!!.isTexture })
+    assertTrue(listOf(LockEvent.PinSet(0, 1), LockEvent.WardHit, LockEvent.PinTouched(0, PinFeel.Binding)).none { cueFor(it, 0.4f).haptic!!.isTexture })
   }
 }

@@ -8,7 +8,7 @@
     <string name="status_overset">PIN %1$d OVERSET</string>
     <string name="status_overset_hint">Key pin is past the shear line. Ease the wrench and it slips back.</string>
     <string name="status_locked">LOCKED</string>
-    <string name="status_locked_hint">Hold the wrench and pull down, then lift pins with another finger.</string>
+    <string name="status_locked_hint">Left thumb: hold and pull down. Right thumb: slide to find a pin, then lift.</string>
     <string name="status_seized">TOO MUCH TENSION</string>
     <string name="status_seized_hint">The binding pin is seized. Ease the wrench until it moves.</string>
     <string name="status_ease_off">EASE OFF</string>
@@ -16,7 +16,7 @@
     <string name="status_false_set">FALSE SET</string>
     <string name="status_false_set_hint">The plug is hanging on pin %1$d\'s spool. Lift it and ease the wrench.</string>
     <string name="status_picking">%1$d / %2$d SET</string>
-    <string name="status_binding_hint">Pin %1$d is binding. Tap it, or drag it up.</string>
+    <string name="status_binding_hint">Pin %1$d is binding. Slide the pick under it and lift.</string>
 
     <!-- Control bar -->
     <string name="control_explode">EXPLODE</string>
@@ -24,6 +24,8 @@
     <string name="control_ghost">GHOST</string>
     <string name="control_exploded">EXPLODED</string>
     <string name="control_reset">RESET</string>
+    <string name="control_swap">SWAP HANDS</string>
+    <string name="control_menu">BENCH</string>
     <string name="percent">%1$d%%</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
@@ -34,15 +36,15 @@
     <string name="wrench_eased">EASED</string>
     <string name="wrench_firm">FIRM</string>
     <string name="wrench_heavy">HEAVY</string>
-    <string name="cd_wrench">Tension wrench. Hold and pull down to put torque on the plug. Letting go drops every pin.</string>
+    <string name="cd_wrench">Tension zone. Hold anywhere and pull down to put torque on the plug. Letting go drops every pin.</string>
 
     <!-- Camera presets -->
     <string name="camera_isometric">ISO</string>
     <string name="camera_keyway">KEYWAY</string>
     <string name="camera_shear">SHEAR</string>
 
-    <!-- Shear line readout -->
-    <string name="shear_line_title">SHEAR LINE</string>
+    <!-- Pick pad -->
+    <string name="pick_title">PICK</string>
     <string name="shear_line_count">%1$d/%2$d</string>
 
     <!-- Stats pill -->
@@ -55,6 +57,6 @@
 
     <!-- Accessibility -->
     <string name="cd_explode_slider">Exploded view amount</string>
-    <string name="cd_pin_stacks">Pin stacks. Tap a column to lift that pin to the shear line.</string>
+    <string name="cd_pick_pad">Pick pad. Slide across to move the pick along the keyway and slide up to lift its tip. Tap a column to lift that pin to the shear line.</string>
     <string name="cd_render_stats">Render stats. %1$s</string>
 </resources>

@@ -7,6 +7,7 @@ import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.RigPose
 import com.lockpicking.bench.domain.motion.SpringValue
+import kotlin.math.abs
 import kotlin.math.min
 
 /** The coarse state of the bench: what changes a few times a gesture, not every frame. */
@@ -20,6 +21,7 @@ data class BenchSnapshot(
   val falseSetPin: Int,
   /** The pin the pick is pushing against a stop it cannot pass at this torque, or -1. */
   val blockedPin: Int,
+  /** The pin the pick's tip is under, or -1 when it is under a land or parked. */
   val selectedPin: Int,
   /** Bumped when a pin sets or the lock opens, to flash the shear line. */
   val setPulse: Int,
@@ -28,8 +30,9 @@ data class BenchSnapshot(
 /**
  * The lock plus everything that moves around it, stepped one display frame at a time.
  *
- * Inputs arrive as intents ([hold], [nudge], [pullWrench], …); [advance] turns them into pin
- * travel and a [pose]. It returns false once nothing is moving, so the caller can stop asking
+ * Inputs arrive as intents ([movePick], [nudge], [pullWrench], …); [advance] turns them into
+ * pin travel and a [pose]. The pick is somewhere along the [keyway] and can only push the pin
+ * its tip is under; between pins it is under a land and knocks on it if lifted. It returns false once nothing is moving, so the caller can stop asking
  * for frames: the scene renders on demand and a settled bench should cost nothing.
  *
  * Pure Kotlin: no rendering, no Android, no Compose.
@@ -40,7 +43,8 @@ class BenchSimulation(
 ) {
   private val lock = LockMechanics(geometry.pinSpecs, driverLength = geometry.driverLength, onEvent = ::handle)
   private val choreography = OpenChoreography(geometry)
-  private val pick = PickMotion(geometry)
+  val keyway = Keyway(geometry)
+  private val pick = PickMotion(geometry, keyway)
   private val nudgeScript = NudgeScript()
 
   /** The hand on the wrench: quick, but it cannot change the torque in no time at all. */
@@ -54,13 +58,25 @@ class BenchSimulation(
 
   val pose = RigPose()
 
-  /** Bumped on every frame in which a pin, the plug or the torque moved, so a readout knows to redraw. */
+  /** Bumped on every frame in which a pin, the pick, the plug or the torque moved, so a readout knows to redraw. */
   var motionTick = 0
     private set
 
-  /** The pin the user is pushing and how far, or -1. Applied once the pick is under it. */
-  private var requestedPin = -1
+  /** Where the hand has the pick along the keyway, 0..1, or NaN while it is parked outside. */
+  private var pickDepth = Float.NaN
+
+  /** How high the hand is trying to lift the tip, in model units. */
   private var requestedLift = 0f
+
+  /** The pin the tip was under last frame, to tell when it arrives under another. */
+  private var tipPin = -1
+
+  /** True once the knock of the tip against the current land has been reported. */
+  private var wardReported = false
+  private var scrapeMark = 0f
+
+  /** The end of the keyway the hand is pushing on and has been told about: -1 the mouth, 1 the back, 0 neither. */
+  private var endReported = 0
 
   /**
    * Where the hand was when the held pin set, or NaN. From then on only travel beyond that
@@ -89,12 +105,40 @@ class BenchSimulation(
 
   // ── Inputs ──────────────────────────────────────────────────────────────────────────────────
 
-  /** Put the pick under [pin] and push it to [lift]. Call again as the finger moves. */
-  fun hold(pin: Int, lift: Float) {
+  /** Where the pick is along the keyway, 0 at the mouth to 1 at the back; 0 while parked. */
+  val pickDepthNow: Float get() = if (pickDepth.isNaN()) 0f else pickDepth
+
+  /** The most [movePick] can ask for: the travel of the longest-travelling pin. */
+  val liftRange: Float = (0 until geometry.pinCount).maxOf { lock.maxLift(it) }
+
+  /**
+   * The hand moves the pick to [depth] along the keyway, 0 at the mouth to 1 at the back wall,
+   * and tries to lift its tip to [lift]. Call again as the thumb moves. A [depth] outside 0..1
+   * is the hand pushing on the end of the keyway.
+   */
+  fun movePick(depth: Float, lift: Float) {
     nudgeScript.cancel()
-    request(pin, lift)
+    if (!acceptsInput) return
+    val end = if (depth < -END_SLOP) -1 else if (depth > 1f + END_SLOP) 1 else 0
+    if (end != 0) {
+      if (endReported != end) {
+        endReported = end
+        onEvent(LockEvent.KeywayEnd)
+      }
+    } else if (depth in 0f..1f) {
+      endReported = 0
+    }
+    pickDepth = depth.coerceIn(0f, 1f)
+    requestedLift = lift.coerceAtLeast(0f)
   }
 
+  /** Put the pick under [pin] and push it to [lift]. */
+  fun hold(pin: Int, lift: Float) {
+    if (pin !in 0 until geometry.pinCount) return
+    movePick(keyway.depthOf(pin), lift)
+  }
+
+  /** The hand relaxes: the tip drops, but the pick stays where it is in the keyway. */
   fun letGo() {
     nudgeScript.cancel()
     clearRequest()
@@ -104,7 +148,8 @@ class BenchSimulation(
   fun nudge(pin: Int) {
     if (!acceptsInput || pin !in 0 until geometry.pinCount) return
     nudgeScript.start(pin, lock.pins[pin].liftToShear)
-    request(pin, 0f)
+    pickDepth = keyway.depthOf(pin)
+    requestedLift = 0f
   }
 
   /** A hand on the wrench, pulling it to [amount] of full torque, 0..1. */
@@ -124,7 +169,7 @@ class BenchSimulation(
   fun reset() {
     nudgeScript.cancel()
     clearRequest()
-    selectedPin = -1
+    parkPick()
     releaseWrench()
     if (lock.opened) {
       choreography.beginRelock()
@@ -169,8 +214,7 @@ class BenchSimulation(
 
     moving = choreography.advance(dt, lock) or moving
     wrench.target = if ((wrenchHeld && acceptsInput) || lock.opened) 1f else 0f
-    val selected = if (acceptsInput) selectedPin else -1
-    moving = pick.advance(dt, selected, lock) or moving
+    moving = pick.advance(dt, if (acceptsInput) pickDepth else Float.NaN, requestedLift, lock) or moving
     explode.target = explodeTarget
     bodyAlpha.target = if (ghost) GHOST_ALPHA else 1f
 
@@ -181,23 +225,26 @@ class BenchSimulation(
 
     val plugBefore = pose.plugDegrees
     val torqueBefore = pose.torque
+    val pickZBefore = pose.pickZ
+    val pickYBefore = pose.pickY
     writePose()
-    if (pose.plugDegrees != plugBefore || pose.torque != torqueBefore) motionTick++
+    val pickMoved = pose.pickZ != pickZBefore || pose.pickY != pickYBefore
+    if (pose.plugDegrees != plugBefore || pose.torque != torqueBefore || pickMoved) motionTick++
     return moving
   }
 
-  private fun request(pin: Int, lift: Float) {
-    if (!acceptsInput || pin !in 0 until geometry.pinCount) return
-    if (requestedPin != pin) setOrigin = Float.NaN
-    requestedPin = pin
-    requestedLift = lift
-    selectedPin = pin
-  }
-
   private fun clearRequest() {
-    requestedPin = -1
+    requestedLift = 0f
     setOrigin = Float.NaN
     catchingUp = false
+  }
+
+  private fun parkPick() {
+    pickDepth = Float.NaN
+    tipPin = -1
+    selectedPin = -1
+    wardReported = false
+    endReported = 0
   }
 
   private fun runNudge(dt: Float) {
@@ -206,25 +253,54 @@ class BenchSimulation(
     // Still short of the shear line: the pin is dragging, or stuck until the wrench is eased.
     val short = lock.keyLift(pin) < lock.pins[pin].liftToShear - REACHED
     val lift = nudgeScript.step(dt, pick.isUnder(pin), short)
-    if (lift != null) request(pin, lift) else clearRequest()
+    if (lift != null) {
+      pickDepth = keyway.depthOf(pin)
+      requestedLift = lift
+    } else {
+      clearRequest()
+    }
   }
 
   /**
-   * A push only lands once the pick has actually arrived under the pin, and then only as fast
-   * as the pin will move: a binding pin drags behind the hand.
+   * What the tip is doing this frame. Under a pin, the push lands on it, and then only as fast
+   * as the pin will move: a binding pin drags behind the hand. Under a land there is nothing
+   * to push, only metal to knock on.
    */
   private fun pushRequestedPin(dt: Float) {
     catchingUp = false
-    val pin = requestedPin
-    if (pin >= 0 && !lock.opened) {
-      if (lock.heldPin >= 0 && lock.heldPin != pin) lock.release()
-      if (!pick.isUnder(pin)) return
+    val under = if (pickDepth.isNaN() || !acceptsInput) -1 else pick.pinUnderTip
+    if (under != tipPin) {
+      // Arriving under a land with the tip already up, it just rides along: no fresh knock.
+      wardReported = under < 0 && requestedLift > Keyway.LAND_CLEARANCE + WARD_SLOP
+      scrapeMark = pick.pickZ
+      tipPin = under
+      setOrigin = Float.NaN
+      if (under >= 0) onEvent(LockEvent.PinTouched(under, lock.feel(under)))
+    }
+    selectedPin = under
+    // A relaxed hand is not holding the pin up: it goes back on its spring.
+    if (under >= 0 && requestedLift > 0f) {
+      if (lock.heldPin >= 0 && lock.heldPin != under) lock.release()
       val origin = setOrigin
-      val wanted = if (origin.isNaN()) requestedLift else lock.pins[pin].liftToShear + (requestedLift - origin)
-      lock.press(pin, lock.reach(pin, wanted, dt), wanted)
-      catchingUp = !lock.opened && lock.keyLift(pin) < min(wanted, lock.liftLimit(pin)) - REACHED
-    } else if (lock.heldPin >= 0) {
-      lock.release()
+      val wanted = if (origin.isNaN()) requestedLift else lock.pins[under].liftToShear + (requestedLift - origin)
+      lock.press(under, lock.reach(under, wanted, dt), wanted)
+      catchingUp = !lock.opened && lock.keyLift(under) < min(wanted, lock.liftLimit(under)) - REACHED
+      return
+    }
+    if (lock.heldPin >= 0) lock.release()
+    setOrigin = Float.NaN
+    if (under >= 0 || pickDepth.isNaN()) return
+    if (requestedLift > Keyway.LAND_CLEARANCE + WARD_SLOP) {
+      if (!wardReported) {
+        wardReported = true
+        scrapeMark = pick.pickZ
+        onEvent(LockEvent.WardHit)
+      } else if (abs(pick.pickZ - scrapeMark) >= SCRAPE_STEP) {
+        scrapeMark = pick.pickZ
+        onEvent(LockEvent.WardScrape)
+      }
+    } else {
+      wardReported = false
     }
   }
 
@@ -257,13 +333,13 @@ class BenchSimulation(
     when (event) {
       is LockEvent.PinSet -> {
         setPulse++
-        if (event.pin == requestedPin) setOrigin = requestedLift
+        if (event.pin == tipPin) setOrigin = requestedLift
       }
       LockEvent.Opened -> {
         setPulse++
         nudgeScript.cancel()
         clearRequest()
-        selectedPin = -1
+        parkPick()
         wrenchHeld = false
         torqueTarget = 0f
       }
@@ -277,6 +353,15 @@ class BenchSimulation(
 
     /** How far the wrench's handle springs round at full torque. */
     const val WRENCH_FLEX_DEGREES = 4f
+
+    /** How far past the end of the keyway the hand must push before it counts as hitting it. */
+    const val END_SLOP = 0.02f
+
+    /** How far above a land's clearance the hand must lift before the tip knocks on it. */
+    const val WARD_SLOP = 0.002f
+
+    /** Travel along a land, pressed against it, between [LockEvent.WardScrape]s. */
+    const val SCRAPE_STEP = 0.006f
 
     /** Closer than this to where it is going, a pin has arrived. */
     const val REACHED = 1e-5f

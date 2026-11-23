@@ -2,7 +2,9 @@ package com.lockpicking.bench.ui.bench
 
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.bench.Keyway
 import com.lockpicking.bench.domain.lock.LockEvent
+import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.motion.FrameClock
@@ -57,6 +59,15 @@ class LockBenchViewModelTest {
     return backgroundScope.launch { vm.runFrameLoop(frameClock()) { _, _ -> } }
   }
 
+  private val keyway = Keyway(testGeometry)
+
+  /** The thumb puts the pick under [pin] and lifts it to [fraction] of that pin's travel. */
+  private fun LockBenchViewModel.dragPin(pin: Int, fraction: Float) {
+    val maxLift = testGeometry.pinSpecs[pin].liftToShear + LockMechanics.MAX_OVERTRAVEL
+    val range = testGeometry.pinSpecs.maxOf { it.liftToShear } + LockMechanics.MAX_OVERTRAVEL
+    onPickMoved(keyway.depthOf(pin), fraction * maxLift / range)
+  }
+
   private fun TestScope.bound(vm: LockBenchViewModel): LockBenchViewModel = vm.also { startScene(it) }
 
   /** Lets the frame loop play out [seconds] of virtual time. */
@@ -91,8 +102,8 @@ class LockBenchViewModelTest {
   @Test
   fun `pin input is ignored until the model binds`() = runTest(dispatcher) {
     val vm = viewModel()
-    assertFalse(vm.acceptsPins)
-    vm.onPinPressed(0)
+    vm.onPickMoved(0.5f, 0.5f)
+    vm.onPickTapped(0.5f)
     vm.onWrenchPulled(0.5f)
     assertEquals(-1, vm.uiState.value.selectedPin)
     assertFalse(vm.uiState.value.tension)
@@ -105,7 +116,6 @@ class LockBenchViewModelTest {
   fun `binding the model publishes its geometry`() = runTest(dispatcher) {
     val vm = bound(viewModel())
     assertEquals(testGeometry, vm.uiState.value.geometry)
-    assertTrue(vm.acceptsPins)
   }
 
   @Test
@@ -169,13 +179,13 @@ class LockBenchViewModelTest {
     backgroundScope.launch { vm.textures.collect { scrapes += it.event } }
     pickOpen(vm)
     assertTrue(vm.uiState.value.opened)
-    assertFalse(vm.acceptsPins)
     assertEquals(4, vm.uiState.value.setPulse)
     assertEquals(3, events.count { it is LockEvent.PinSet })
     assertEquals(2, events.count { it is LockEvent.FalseSet })
     assertEquals(LockEvent.Opened, events.last())
-    assertTrue("the scrape of a pin is kept off the event stream", events.none { it is LockEvent.Grit })
-    assertTrue(scrapes.isNotEmpty() && scrapes.all { it is LockEvent.Grit })
+    assertTrue("textures are kept off the event stream", events.none { it is LockEvent.Grit || it is LockEvent.SpringTick })
+    assertTrue(scrapes.any { it is LockEvent.Grit })
+    assertTrue(scrapes.all { it is LockEvent.Grit || it is LockEvent.SpringTick || it == LockEvent.WardScrape })
   }
 
   @Test
@@ -200,18 +210,18 @@ class LockBenchViewModelTest {
       play()
     }
     // Pin 2 comes off its flange and the plug drops into the spools.
-    vm.onPinPressed(1)
+    vm.dragPin(1, 0f)
     play(0.5f)
-    vm.onPinDragged(1, 0.15f)
+    vm.dragPin(1, 0.15f)
     play(0.5f)
-    vm.onPinReleased()
+    vm.onPickRested()
     play(0.5f)
     assertEquals(2, vm.uiState.value.falseSetPin)
     assertEquals(BenchStatus.FalseSet(pinNumber = 3), vm.uiState.value.status())
 
-    vm.onPinPressed(2)
+    vm.dragPin(2, 0f)
     play(0.5f)
-    vm.onPinDragged(2, 0.5f)
+    vm.dragPin(2, 0.5f)
     play(0.5f)
     assertEquals(2, vm.uiState.value.blockedPin)
     assertEquals(BenchStatus.EaseOff(pinNumber = 3), vm.uiState.value.status())
@@ -220,9 +230,9 @@ class LockBenchViewModelTest {
   @Test
   fun `dragging a pin reports its lift in telemetry`() = runTest(dispatcher) {
     val vm = bound(viewModel())
-    vm.onPinPressed(1)
+    vm.dragPin(1, 0f)
     play(0.5f)
-    vm.onPinDragged(1, 0.2f)
+    vm.dragPin(1, 0.2f)
     play(0.1f)
     val telemetry = vm.telemetry()!!
     assertEquals("KeyPin_2", telemetry.selectedPinNode)
@@ -233,10 +243,10 @@ class LockBenchViewModelTest {
   @Test
   fun `the motion tick advances while a pin moves`() = runTest(dispatcher) {
     val vm = bound(viewModel())
-    vm.onPinPressed(0)
+    vm.dragPin(0, 0f)
     play(0.5f)
     val before = vm.motionTick.value
-    vm.onPinDragged(0, 0.3f)
+    vm.dragPin(0, 0.3f)
     play(0.1f)
     assertTrue(vm.motionTick.value > before)
   }

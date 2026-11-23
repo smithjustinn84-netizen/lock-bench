@@ -18,6 +18,9 @@ class LockMechanicsTest {
   )
   private val lock = LockMechanics(specs, onEvent = { events += it })
 
+  /** What the lock did, without what the hands only feel: the wrench biting and springs giving. */
+  private val milestones get() = events.filterNot { it is LockEvent.SpringTick || it is LockEvent.TensionBite }
+
   private fun nudgeToShear(pin: Int) {
     lock.press(pin, specs[pin].liftToShear)
     lock.release()
@@ -54,7 +57,7 @@ class LockMechanicsTest {
     settle()
     assertEquals(0f, lock.keyLift(0), 0f)
     assertEquals(0f, lock.driverLift(0), 0f)
-    assertTrue(events.isEmpty())
+    assertTrue(milestones.isEmpty())
     assertFalse(lock.isSettling)
   }
 
@@ -94,7 +97,7 @@ class LockMechanicsTest {
     assertEquals(PinState.Resting, lock.state(3))
     nudgeToShear(0)
     assertEquals(PinState.Set, lock.state(0))
-    assertEquals(listOf<LockEvent>(LockEvent.PinSet(0, 1)), events)
+    assertEquals(listOf<LockEvent>(LockEvent.PinSet(0, 1)), milestones)
     assertEquals(3, lock.bindingPin)
     assertEquals(LockMechanics.SET_DEGREES, turned(), 1e-4f)
   }
@@ -142,7 +145,7 @@ class LockMechanicsTest {
     assertEquals(0f, lock.keyLift(0), 0f)
     assertEquals(0, lock.blockedPin)
     lock.press(0, 0.020f)
-    assertEquals("said once per push", listOf<LockEvent>(LockEvent.Seized(0)), events)
+    assertEquals("said once per push", listOf<LockEvent>(LockEvent.Seized(0)), milestones)
     // A pin that is not binding still moves.
     lock.release()
     lock.press(3, 0.010f)
@@ -392,6 +395,97 @@ class LockMechanicsTest {
     }
     assertEquals(LockEvent.Opened, events.last())
     assertEquals(8, events.count { it is LockEvent.CounterRotation })
+  }
+
+  // ── Feel ────────────────────────────────────────────────────────────────────────────────────
+
+  @Test
+  fun `the wrench is felt taking up and again when it is pulled too hard`() {
+    lock.applyTorque(0.05f)
+    assertTrue(events.isEmpty())
+    lock.applyTorque(0.3f)
+    lock.applyTorque(0.5f)
+    assertEquals(listOf<LockEvent>(LockEvent.TensionBite(heavy = false)), events)
+    lock.applyTorque(0.8f)
+    lock.applyTorque(0.9f)
+    assertEquals(LockEvent.TensionBite(heavy = true), events.last())
+    assertEquals(2, events.size)
+  }
+
+  @Test
+  fun `a touch tells the binding pin from a springy one and from a set one`() {
+    assertEquals("with no torque every pin is just on its spring", PinFeel.Springy, lock.feel(0))
+    lock.applyTorque(0.5f)
+    assertEquals(PinFeel.Binding, lock.feel(0))
+    assertEquals(PinFeel.Springy, lock.feel(3))
+    nudgeToShear(0)
+    assertEquals(PinFeel.Loose, lock.feel(0))
+    assertEquals(PinFeel.Binding, lock.feel(3))
+  }
+
+  @Test
+  fun `a free pin gives on its spring, more firmly the further it is pushed`() {
+    lock.applyTorque(0.5f)
+    var lift = 0f
+    while (lift < 0.03f) {
+      lift += 0.001f
+      lock.press(3, lift)
+    }
+    val ticks = events.filterIsInstance<LockEvent.SpringTick>()
+    assertEquals(4, ticks.size)
+    assertTrue(ticks.all { it.pin == 3 })
+    assertEquals(ticks.sortedBy { it.compression }, ticks)
+    assertTrue(ticks.first().compression < ticks.last().compression)
+    assertTrue("a spring does not scrape", events.none { it is LockEvent.Grit })
+  }
+
+  @Test
+  fun `a binding pin scrapes and does not feel like a spring`() {
+    lock.applyTorque(0.5f)
+    var lift = 0f
+    while (lift < 0.02f) {
+      lift += 0.001f
+      lock.press(0, lift)
+    }
+    assertTrue(events.any { it is LockEvent.Grit })
+    assertTrue(events.none { it is LockEvent.SpringTick })
+  }
+
+  @Test
+  fun `a set pin is loose up to the shear line and then solid`() {
+    lock.applyTorque(0.5f)
+    nudgeToShear(0)
+    events.clear()
+    lock.press(0, 0.020f)
+    assertTrue("no spring behind it and nothing to scrape on", events.isEmpty())
+    lock.press(0, 0.045f)
+    lock.press(0, 0.050f)
+    assertEquals("said once per push", listOf<LockEvent>(LockEvent.HardStop(0)), events)
+    assertEquals(specs[0].liftToShear, lock.keyLift(0), 0f)
+    // Back off and push again: it knocks again.
+    lock.press(0, 0.020f)
+    lock.press(0, 0.045f)
+    assertEquals(2, events.count { it is LockEvent.HardStop })
+  }
+
+  @Test
+  fun `the top of a chamber is a hard stop that easing the wrench will not help`() {
+    lock.applyTorque(0.5f)
+    val top = lock.maxLift(3)
+    lock.press(3, top, wanted = top + 0.01f)
+    lock.press(3, top, wanted = top + 0.02f)
+    assertEquals(listOf<LockEvent>(LockEvent.HardStop(3)), milestones)
+    assertEquals(-1, lock.blockedPin)
+  }
+
+  @Test
+  fun `an overset is one event, not a jam and then a knock`() {
+    lock.applyTorque(0.5f)
+    lock.press(0, specs[0].liftToShear)
+    lock.press(0, lock.maxLift(0))
+    lock.press(0, lock.maxLift(0), wanted = lock.maxLift(0) + 0.02f)
+    assertEquals(PinState.Overset, lock.state(0))
+    assertTrue(events.none { it is LockEvent.HardStop })
   }
 
   @Test

@@ -135,6 +135,10 @@ class LockSoundEngine(
         after(SHACKLE_AFTER_TURN_MS) { play(LockSfx.ShacklePop, strength, jitter = false) }
       }
       LockSound.Relock -> play(LockSfx.PadlockReset, strength)
+      LockSound.Touch -> play(LockSfx.PinTouch, strength * 0.6f)
+      LockSound.Knock -> play(LockSfx.PinOvershoot, strength * 0.5f)
+      LockSound.Scrape -> play(LockSfx.PinSlide, strength * 0.5f)
+      LockSound.Creak -> play(LockSfx.CoreTensionCreak, strength * 0.6f)
     }
   }
 

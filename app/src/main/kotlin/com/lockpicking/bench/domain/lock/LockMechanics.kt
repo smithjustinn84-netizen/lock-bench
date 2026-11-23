@@ -70,6 +70,13 @@ class LockMechanics(
   override fun driverTilt(index: Int): Float =
     if (pinStates[index] == PinState.Resting) min(clearance(index), falseSetDepth) else 0f
 
+  /** What [pin] gives back to a light touch of the pick. */
+  fun feel(pin: Int): PinFeel = when {
+    pinStates[pin] == PinState.Set -> PinFeel.Loose
+    pinStates[pin] == PinState.Overset || bindingPin == pin -> PinFeel.Binding
+    else -> PinFeel.Springy
+  }
+
   /** The pin the pick is under, or -1. */
   var heldPin = -1
     private set
@@ -221,18 +228,24 @@ class LockMechanics(
     val shear = pins[pin].liftToShear
     when (pinStates[pin]) {
       // Jammed against the bible: the pick cannot move it.
-      PinState.Overset -> return
+      PinState.Overset -> {
+        noteHardStop(pin, wanted, keyLifts[pin])
+        return
+      }
       PinState.Set -> {
         if (!heldSetThisPush) {
           // The plug has turned under this driver, so the key pin has nowhere to go past the
           // shear line: its chamber no longer lines up.
           keyLifts[pin] = lift.coerceIn(0f, shear)
+          noteHardStop(pin, wanted, shear)
           return
         }
         keyLifts[pin] = lift.coerceIn(0f, maxLift(pin))
         if (keyLifts[pin] > shear + oversetMargin()) {
           pinStates[pin] = PinState.Overset
           driverLifts[pin] = keyLifts[pin]
+          // The jam is its own event: the stop the pick is now against needs no second knock.
+          blockReported = true
           onEvent(LockEvent.PinOverset(pin))
           refreshPlug()
         }
@@ -272,9 +285,9 @@ class LockMechanics(
     }
     moveTo(pin, target)
 
-    if (wasBinding && keyLifts[pin] - gritMark >= GRIT_STEP) {
+    if (keyLifts[pin] - gritMark >= (if (wasBinding) GRIT_STEP else SPRING_STEP)) {
       gritMark = keyLifts[pin]
-      onEvent(LockEvent.Grit(pin))
+      onEvent(if (wasBinding) LockEvent.Grit(pin) else LockEvent.SpringTick(pin, keyLifts[pin] / maxLift(pin)))
     } else if (keyLifts[pin] < before) {
       gritMark = min(gritMark, keyLifts[pin])
     }
@@ -294,11 +307,17 @@ class LockMechanics(
     torque = value.coerceIn(0f, 1f)
     if (!engaged && torque >= T_BIND) {
       engaged = true
+      onEvent(LockEvent.TensionBite(heavy = false))
     } else if (engaged && torque < T_DROP) {
       engaged = false
       drop()
     }
-    if (!seized && torque >= T_HEAVY) seized = true else if (seized && torque < T_HEAVY_OFF) seized = false
+    if (!seized && torque >= T_HEAVY) {
+      seized = true
+      onEvent(LockEvent.TensionBite(heavy = true))
+    } else if (seized && torque < T_HEAVY_OFF) {
+      seized = false
+    }
     refreshPlug()
   }
 
@@ -341,15 +360,32 @@ class LockMechanics(
   /** Remembers that the pick is pushing [pin] against a stop, and says so once per push. */
   private fun noteBlock(pin: Int, wanted: Float, limit: Float) {
     val kind = limitKind
-    if (kind == Limit.Travel || wanted <= limit + BLOCK_SLOP) {
+    if (wanted <= limit + BLOCK_SLOP) {
       blockedPin = -1
       blockReported = false
       return
     }
-    blockedPin = pin
+    // The top of the chamber is just the end of the road: nothing the wrench can do about it.
+    blockedPin = if (kind == Limit.Travel) -1 else pin
     if (blockReported) return
     blockReported = true
-    onEvent(if (kind == Limit.Seized) LockEvent.Seized(pin) else LockEvent.SpoolBlocked(pin))
+    onEvent(
+      when (kind) {
+        Limit.Seized -> LockEvent.Seized(pin)
+        Limit.Spool -> LockEvent.SpoolBlocked(pin)
+        Limit.Travel -> LockEvent.HardStop(pin)
+      },
+    )
+  }
+
+  /** Says once per push that the pick is against a [stop] that is solid metal. */
+  private fun noteHardStop(pin: Int, wanted: Float, stop: Float) {
+    if (wanted <= stop + BLOCK_SLOP) {
+      blockReported = false
+    } else if (!blockReported) {
+      blockReported = true
+      onEvent(LockEvent.HardStop(pin))
+    }
   }
 
   /** Everything falls: the torque is no longer holding any driver on the ledge. */
@@ -502,6 +538,9 @@ class LockMechanics(
 
     /** Binding-pin travel between [LockEvent.Grit] ticks. */
     const val GRIT_STEP = 0.004f
+
+    /** Travel of a pin that is free on its spring between [LockEvent.SpringTick]s. */
+    const val SPRING_STEP = 0.007f
 
     /** How far the hand must be past a stop before the pin counts as blocked. */
     private const val BLOCK_SLOP = 0.002f

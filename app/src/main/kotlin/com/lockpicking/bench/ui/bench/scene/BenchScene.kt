@@ -40,8 +40,8 @@ private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
 
 /**
  * The 3D bench: the padlock model under a key light and the studio environment, an orbit
- * camera, and pin hit-testing. Every touch on the screen arrives here, the ones on the HUD's
- * wrench lever included; [touch] decides which are the bench's and which move the camera.
+ * camera. Every touch on the screen arrives here, the ones on the HUD's tension zone and pick
+ * pad included; [touch] decides which are the bench's and which move the camera.
  *
  * Everything Filament owns lives here and dies with the composition. Once the model binds,
  * [host] gets the lock's geometry and drives the rig through its frame loop.
@@ -124,9 +124,7 @@ fun BenchScene(
     cameraNode = cameraNode,
     collisionSystem = collisionSystem,
     cameraManipulator = manipulator,
-    onTouchEvent = { event, _ ->
-      touch.handle(event) { x, y -> rig?.pinAt(collisionSystem.hitTest(x, y)) ?: -1 }
-    },
+    onTouchEvent = { event, _ -> touch.handle(event) },
     onFrame = { meter.onFrame() },
   ) {
     rememberModelInstance(modelLoader, AssetPaths.MODEL)?.let { instance ->

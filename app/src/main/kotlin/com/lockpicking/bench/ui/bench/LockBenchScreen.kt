@@ -3,12 +3,14 @@ package com.lockpicking.bench.ui.bench
 import android.view.ViewConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -19,8 +21,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,9 +31,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -46,8 +49,10 @@ import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
 import com.lockpicking.bench.ui.bench.input.BenchTouchRouter
 import com.lockpicking.bench.ui.bench.input.TouchRect
 import com.lockpicking.bench.ui.bench.scene.BenchScene
+import com.lockpicking.bench.ui.components.BenchButton
 import com.lockpicking.bench.ui.components.ControlBar
-import com.lockpicking.bench.ui.components.ShearLineIndicator
+import com.lockpicking.bench.ui.components.PickPad
+import com.lockpicking.bench.ui.components.PickPadInset
 import com.lockpicking.bench.ui.components.StatusBlock
 import com.lockpicking.bench.ui.components.TensionLever
 import com.lockpicking.bench.ui.components.Vignette
@@ -56,22 +61,30 @@ import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 import org.koin.compose.viewmodel.koinViewModel
 
-/** Finger travel that lifts a pin through its whole range. */
-private val PinDragRange = 150.dp
+/** Thumb travel that lifts the pick's tip through its whole range. */
+private val PickLiftRange = 150.dp
 
-/** Room the status block and stats pill take at the top of the screen. */
-private val HudTopBand = 64.dp
+/** Room the status block, the stats pill and the drawer button take at the top of the screen. */
+private val HudTopBand = 68.dp
+
+/** The two thumb zones. The lock is framed in what they leave between them. */
+private val TensionZoneWidth = 132.dp
+private val PickPadWidth = 264.dp
+private val HudMargin = 12.dp
+private val DrawerWidth = 400.dp
 
 /** The parts of the HUD the touch router has to know the whereabouts of. */
 enum class HudPart {
   /** The 3D view itself: every other rectangle is measured from its corner. */
   Scene,
 
-  /** The tension lever. A finger that lands here is a hand on the wrench. */
+  /** The tension zone. A thumb that lands here is a hand on the wrench. */
   Wrench,
 
-  /** Panels that take their own touches, so that a pin behind one is not picked through it. */
-  PinReadout,
+  /** The pick pad. A thumb that lands here is a hand on the pick. */
+  Pick,
+
+  /** The drawer, which takes its own touches even where it lies over a thumb zone. */
   Controls,
 }
 
@@ -90,7 +103,8 @@ private class TouchLayout(private val router: BenchTouchRouter) {
       TouchRect(it.left - origin.x, it.top - origin.y, it.right - origin.x, it.bottom - origin.y)
     }
     router.wrenchBounds = local(HudPart.Wrench) ?: TouchRect.Empty
-    router.blocked = listOfNotNull(local(HudPart.PinReadout), local(HudPart.Controls))
+    router.pickBounds = local(HudPart.Pick) ?: TouchRect.Empty
+    router.blocked = listOfNotNull(local(HudPart.Controls))
   }
 }
 
@@ -121,7 +135,9 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   }
   val layout = remember(touch) { TouchLayout(touch.router) }
   with(density) {
-    touch.router.dragRangePx = PinDragRange.toPx()
+    touch.router.dragRangePx = PickLiftRange.toPx()
+    // The thumb and the pick drawn on the pad move together.
+    touch.router.depthRangePx = (PickPadWidth - PickPadInset * 2).toPx()
     touch.router.wrenchThrowPx = WrenchThrowLength.toPx()
   }
   // Behind another app there is no hand on the wrench.
@@ -134,9 +150,10 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
     pins = viewModel.readout,
     torque = { viewModel.pose?.torque ?: 0f },
     plugDegrees = { viewModel.pose?.plugDegrees ?: 0f },
+    pickZ = { viewModel.pose?.pickZ ?: Float.NaN },
+    pickY = { viewModel.pose?.pickY ?: 0f },
     meter = meter,
     telemetry = viewModel::telemetry,
-    onNudge = viewModel::onPinTapped,
     onExplodeChange = viewModel::onExplodeChanged,
     onExplodedToggle = viewModel::onExplodedToggled,
     onHintsToggle = viewModel::onHintsToggled,
@@ -144,6 +161,11 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
     onReset = {
       touch.router.letGo()
       viewModel.onReset()
+    },
+    onSwapHands = {
+      // The zones are about to change places under whatever thumbs are down.
+      touch.router.letGo()
+      viewModel.onHandsSwapped()
     },
     onPreset = viewModel::onPresetSelected,
     onPlaced = layout::place,
@@ -162,9 +184,11 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
 }
 
 /**
- * The bench layout: the 3D [scene] full-bleed, with the HUD over it. Stateless; [scene] gets
- * the padding that keeps the lock clear of the HUD, and [onPlaced] hears where the parts of
- * the HUD that matter to touch have been laid out, in window pixels.
+ * The bench layout, for a phone held in landscape in two hands: the 3D [scene] full-bleed,
+ * the tension zone under one thumb and the pick pad under the other, and everything else out
+ * of their way in a drawer. Stateless; [scene] gets the padding that frames the lock between
+ * the two zones, and [onPlaced] hears where the parts of the HUD that matter to touch have
+ * been laid out, in window pixels.
  */
 @Composable
 fun LockBenchScreen(
@@ -173,97 +197,114 @@ fun LockBenchScreen(
   pins: LockReadout?,
   torque: () -> Float,
   plugDegrees: () -> Float,
+  pickZ: () -> Float,
+  pickY: () -> Float,
   meter: FrameMeter,
   telemetry: () -> BenchTelemetry?,
-  onNudge: (Int) -> Unit,
   onExplodeChange: (Float) -> Unit,
   onExplodedToggle: () -> Unit,
   onHintsToggle: () -> Unit,
   onGhostToggle: () -> Unit,
   onReset: () -> Unit,
+  onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
   modifier: Modifier = Modifier,
   onPlaced: (HudPart, Rect) -> Unit = { _, _ -> },
   scene: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
-  val density = LocalDensity.current
-  var barHeightPx by remember { mutableIntStateOf(0) }
+  var drawerOpen by rememberSaveable { mutableStateOf(false) }
+  val direction = LocalLayoutDirection.current
   val insets = WindowInsets.safeDrawing.asPaddingValues()
+  // Tension is the left hand's job unless the hands are swapped.
+  val wrenchOnLeft = !state.swapHands
+  val leftZone = if (wrenchOnLeft) TensionZoneWidth else PickPadWidth
+  val rightZone = if (wrenchOnLeft) PickPadWidth else TensionZoneWidth
   val sceneInsets = PaddingValues(
+    start = insets.calculateStartPadding(direction) + HudMargin + leftZone,
     top = insets.calculateTopPadding() + HudTopBand,
-    bottom = with(density) { barHeightPx.toDp() },
+    end = insets.calculateEndPadding(direction) + HudMargin + rightZone,
+    bottom = insets.calculateBottomPadding(),
   )
 
   Box(modifier.fillMaxSize().background(BenchColors.Ink)) {
     scene(sceneInsets)
     Vignette()
-    Column(
+    Box(
       Modifier
         .fillMaxSize()
         .padding(insets)
-        .padding(horizontal = 12.dp, vertical = 8.dp),
+        .padding(horizontal = HudMargin, vertical = 8.dp),
     ) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+      Row(Modifier.fillMaxWidth().align(Alignment.TopStart), verticalAlignment = Alignment.Top) {
         StatusBlock(state.status(), Modifier.weight(1f).padding(end = 12.dp))
         LiveStatsPill(state.modelInfo, meter, telemetry)
-      }
-      Box(Modifier.weight(1f).fillMaxWidth()) {
-        state.loadError?.let {
-          Text(
-            stringResource(R.string.model_load_failed, it),
-            style = BenchType.Readout,
-            color = BenchColors.Fault,
-            modifier = Modifier.align(Alignment.Center),
-          )
-        }
-        val geometry = state.geometry
-        if (geometry != null && pins != null) {
-          ShearLineIndicator(
-            geometry = geometry,
-            pins = pins,
-            motionTick = motionTick,
-            setPulse = state.setPulse,
-            setCount = state.setCount,
-            opened = state.opened,
-            // Which pin is binding is exactly what the hints give away.
-            bindingPin = if (state.hints) state.bindingPin else -1,
-            selectedPin = state.selectedPin,
-            onNudge = onNudge,
-            modifier = Modifier
-              .align(Alignment.BottomStart)
-              .width(168.dp)
-              .padding(bottom = 8.dp)
-              .onGloballyPositioned { onPlaced(HudPart.PinReadout, it.boundsInWindow()) },
-          )
-          TensionLever(
-            band = state.band,
-            motionTick = motionTick,
-            torque = torque,
-            plugDegrees = plugDegrees,
-            modifier = Modifier
-              .align(Alignment.BottomEnd)
-              .padding(bottom = 8.dp)
-              .onGloballyPositioned { onPlaced(HudPart.Wrench, it.boundsInWindow()) },
-          )
+        Row(Modifier.padding(start = 8.dp).width(84.dp)) {
+          BenchButton(stringResource(R.string.control_menu), selected = drawerOpen) { drawerOpen = !drawerOpen }
         }
       }
-      ControlBar(
-        explode = state.explode,
-        exploded = state.exploded,
-        hints = state.hints,
-        ghost = state.ghost,
-        preset = state.preset,
-        onExplodeChange = onExplodeChange,
-        onExplodedToggle = onExplodedToggle,
-        onHintsToggle = onHintsToggle,
-        onGhostToggle = onGhostToggle,
-        onReset = onReset,
-        onPreset = onPreset,
-        modifier = Modifier
-          .fillMaxWidth()
-          .onSizeChanged { barHeightPx = it.height }
-          .onGloballyPositioned { onPlaced(HudPart.Controls, it.boundsInWindow()) },
-      )
+      state.loadError?.let {
+        Text(
+          stringResource(R.string.model_load_failed, it),
+          style = BenchType.Readout,
+          color = BenchColors.Fault,
+          modifier = Modifier.align(Alignment.Center),
+        )
+      }
+      val geometry = state.geometry
+      if (geometry != null && pins != null) {
+        val zone = Modifier.padding(top = HudTopBand).fillMaxHeight()
+        TensionLever(
+          band = state.band,
+          motionTick = motionTick,
+          torque = torque,
+          plugDegrees = plugDegrees,
+          modifier = zone
+            .align(if (wrenchOnLeft) Alignment.BottomStart else Alignment.BottomEnd)
+            .width(TensionZoneWidth)
+            .onGloballyPositioned { onPlaced(HudPart.Wrench, it.boundsInWindow()) },
+        )
+        PickPad(
+          geometry = geometry,
+          pins = pins,
+          motionTick = motionTick,
+          setPulse = state.setPulse,
+          setCount = state.setCount,
+          opened = state.opened,
+          // Which pin is binding is exactly what the hints give away.
+          bindingPin = if (state.hints) state.bindingPin else -1,
+          selectedPin = state.selectedPin,
+          pickZ = pickZ,
+          pickY = pickY,
+          modifier = zone
+            .align(if (wrenchOnLeft) Alignment.BottomEnd else Alignment.BottomStart)
+            .width(PickPadWidth)
+            .onGloballyPositioned { onPlaced(HudPart.Pick, it.boundsInWindow()) },
+        )
+      }
+      if (drawerOpen) {
+        ControlBar(
+          explode = state.explode,
+          exploded = state.exploded,
+          hints = state.hints,
+          ghost = state.ghost,
+          swapHands = state.swapHands,
+          preset = state.preset,
+          onExplodeChange = onExplodeChange,
+          onExplodedToggle = onExplodedToggle,
+          onHintsToggle = onHintsToggle,
+          onGhostToggle = onGhostToggle,
+          onReset = onReset,
+          onSwapHands = onSwapHands,
+          onPreset = onPreset,
+          modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 56.dp)
+            .width(DrawerWidth)
+            .onGloballyPositioned { onPlaced(HudPart.Controls, it.boundsInWindow()) },
+        )
+      }
+      // A closed drawer is not in the way of anything.
+      DisposableEffect(drawerOpen) { onDispose { onPlaced(HudPart.Controls, Rect.Zero) } }
     }
   }
 }

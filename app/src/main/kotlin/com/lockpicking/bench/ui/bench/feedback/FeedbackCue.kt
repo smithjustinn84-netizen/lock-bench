@@ -2,6 +2,7 @@ package com.lockpicking.bench.ui.bench.feedback
 
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
+import com.lockpicking.bench.domain.lock.PinFeel
 
 /** A lock event and the torque it happened under, which is how hard it lands in the hand. */
 data class LockFeedback(val event: LockEvent, val torque: Float)
@@ -28,10 +29,25 @@ enum class Haptic {
 
   /** A click and then a thud: the plug turning and the shackle letting go. */
   Release,
+
+  /** A soft, round bump: the pick's tip finding a pin. */
+  Bump,
+
+  /** One sharp, hard knock: the pick against solid metal. */
+  Knock,
+
+  /** A dry tick, harder than [Grain]: the tip dragged along a land. */
+  Scrape,
+
+  /** Barely there: a pin giving on its spring. */
+  Spring,
 }
 
+/** True for the shapes that come in a stream and are felt as a texture, not counted. */
+val Haptic.isTexture: Boolean get() = this == Haptic.Grain || this == Haptic.Scrape || this == Haptic.Spring
+
 /** The sounds the lock makes. [LockSoundEngine] has the recording for each. */
-enum class LockSound { SetClick, FalseSetClunk, CounterTick, Blocked, Grit, Rattle, Jam, SlipBack, Open, Relock }
+enum class LockSound { SetClick, FalseSetClunk, CounterTick, Blocked, Grit, Rattle, Jam, SlipBack, Open, Relock, Touch, Knock, Scrape, Creak }
 
 /** What one lock event feels and sounds like. [strength] is 0..1 and scales both. */
 data class FeedbackCue(val haptic: Haptic?, val sound: LockSound?, val strength: Float)
@@ -57,6 +73,19 @@ fun cueFor(event: LockEvent, torque: Float): FeedbackCue {
     is LockEvent.Grit -> FeedbackCue(Haptic.Grain, LockSound.Grit, 0.2f + 0.8f * load)
     is LockEvent.PinOverset -> FeedbackCue(Haptic.Thud, LockSound.Jam, 0.9f)
     is LockEvent.OversetReleased -> FeedbackCue(Haptic.Tick, LockSound.SlipBack, 0.5f)
+    // What the tip finds is the whole game: the binding pin pushes back, a set one barely registers.
+    is LockEvent.PinTouched -> when (event.feel) {
+      PinFeel.Binding -> FeedbackCue(Haptic.Bump, LockSound.Touch, 0.6f + 0.4f * load)
+      PinFeel.Springy -> FeedbackCue(Haptic.Bump, LockSound.Touch, 0.3f)
+      PinFeel.Loose -> FeedbackCue(Haptic.Bump, null, 0.12f)
+    }
+    is LockEvent.SpringTick -> FeedbackCue(Haptic.Spring, null, 0.1f + 0.3f * event.compression.coerceIn(0f, 1f))
+    is LockEvent.HardStop -> FeedbackCue(Haptic.Knock, LockSound.Knock, 0.8f)
+    LockEvent.WardHit -> FeedbackCue(Haptic.Knock, LockSound.Knock, 1f)
+    LockEvent.WardScrape -> FeedbackCue(Haptic.Scrape, LockSound.Scrape, 0.45f)
+    LockEvent.KeywayEnd -> FeedbackCue(Haptic.Thud, LockSound.Touch, 0.7f)
+    is LockEvent.TensionBite ->
+      if (event.heavy) FeedbackCue(Haptic.Thud, LockSound.Creak, 0.8f) else FeedbackCue(Haptic.Tick, LockSound.Creak, 0.35f)
     LockEvent.Dropped -> FeedbackCue(Haptic.Rattle, LockSound.Rattle, 0.7f)
     LockEvent.Opened -> FeedbackCue(Haptic.Release, LockSound.Open, 1f)
     LockEvent.Relocked -> FeedbackCue(null, LockSound.Relock, 0.7f)
