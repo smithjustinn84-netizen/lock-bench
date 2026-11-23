@@ -1,4 +1,4 @@
-package com.lockpicking.bench.lock
+package com.lockpicking.bench.domain.lock
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,10 +25,10 @@ class LockMechanicsTest {
   @Test
   fun `without tension a lifted pin just falls back`() {
     nudgeToShear(2)
-    assertEquals(PinState.Resting, lock.states[2])
+    assertEquals(PinState.Resting, lock.state(2))
     settle()
-    assertEquals(0f, lock.keyLift[2], 0f)
-    assertEquals(0f, lock.driverLift[2], 0f)
+    assertEquals(0f, lock.keyLift(2), 0f)
+    assertEquals(0f, lock.driverLift(2), 0f)
     assertTrue(events.isEmpty())
     assertFalse(lock.isSettling)
   }
@@ -38,9 +38,9 @@ class LockMechanicsTest {
     lock.applyTension(true)
     assertEquals(2, lock.bindingPin)
     nudgeToShear(0)
-    assertEquals(PinState.Resting, lock.states[0])
+    assertEquals(PinState.Resting, lock.state(0))
     nudgeToShear(2)
-    assertEquals(PinState.Set, lock.states[2])
+    assertEquals(PinState.Set, lock.state(2))
     assertEquals(listOf<LockEvent>(LockEvent.PinSet(2, 1)), events)
     assertEquals(0, lock.bindingPin)
     assertEquals(LockMechanics.SET_DEGREES, lock.plugDegrees, 0f)
@@ -51,8 +51,8 @@ class LockMechanicsTest {
     lock.applyTension(true)
     nudgeToShear(2)
     settle()
-    assertEquals(0f, lock.keyLift[2], 0f)
-    assertEquals(specs[2].liftToShear, lock.driverLift[2], 0f)
+    assertEquals(0f, lock.keyLift(2), 0f)
+    assertEquals(specs[2].liftToShear, lock.driverLift(2), 0f)
   }
 
   @Test
@@ -72,20 +72,20 @@ class LockMechanicsTest {
     lock.press(2, shear)
     lock.press(2, shear + LockMechanics.OVERSET_MARGIN + 0.004f)
     lock.release()
-    assertEquals(PinState.Overset, lock.states[2])
+    assertEquals(PinState.Overset, lock.state(2))
     assertEquals(LockEvent.PinOverset(2), events.last())
     assertEquals(2, lock.bindingPin)
     settle()
-    assertTrue("an overset pin stays jammed", lock.keyLift[2] > shear)
+    assertTrue("an overset pin stays jammed", lock.keyLift(2) > shear)
     nudgeToShear(0)
-    assertEquals(PinState.Resting, lock.states[0])
+    assertEquals(PinState.Resting, lock.state(0))
   }
 
   @Test
   fun `one fast drag across the shear line sets rather than oversets`() {
     lock.applyTension(true)
     lock.press(2, lock.maxLift(2))
-    assertEquals(PinState.Set, lock.states[2])
+    assertEquals(PinState.Set, lock.state(2))
   }
 
   @Test
@@ -95,9 +95,9 @@ class LockMechanicsTest {
     nudgeToShear(0)
     lock.applyTension(false)
     assertEquals(LockEvent.Dropped, events.last())
-    assertTrue(lock.states.all { it == PinState.Resting })
+    assertTrue((0 until lock.pinCount).all { lock.state(it) == PinState.Resting })
     settle()
-    assertTrue(lock.driverLift.all { it == 0f })
+    assertTrue((0 until lock.pinCount).all { lock.driverLift(it) == 0f })
     assertEquals(0f, lock.plugDegrees, 0f)
   }
 
@@ -110,6 +110,6 @@ class LockMechanicsTest {
     assertFalse(lock.tension)
     assertEquals(LockEvent.Relocked, events.last())
     settle()
-    assertTrue(lock.driverLift.all { it == 0f })
+    assertTrue((0 until lock.pinCount).all { lock.driverLift(it) == 0f })
   }
 }

@@ -1,0 +1,11 @@
+package com.lockpicking.bench.ui.bench
+
+import androidx.annotation.StringRes
+import com.lockpicking.bench.R
+
+/** The camera angles the bench offers. Where each one puts the camera is the scene's business. */
+enum class CameraPreset(@param:StringRes val label: Int) {
+  Isometric(R.string.camera_isometric),
+  KeywayFront(R.string.camera_keyway),
+  ShearSide(R.string.camera_shear),
+}

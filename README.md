@@ -38,11 +38,17 @@ Drag anywhere off the pins to orbit the camera, and pinch to zoom.
 
 ```
 app/src/main/kotlin/com/lockpicking/bench/
-  lock/LockMechanics.kt   pin-tumbler state machine (no Android, unit tested)
-  lock/LockSession.kt     drives the mechanics from touch input
-  lock/LockRig.kt         poses the glTF nodes from the lock state
-  ui/LockBenchScreen.kt   SceneView scene, camera, touch handling
-  ui/Hud.kt               shear line panel and controls
+  domain/                 pure Kotlin, no Android, unit tested
+    lock/                 LockMechanics: the pin-tumbler state machine
+    bench/                BenchSimulation: frame-stepped lock, pick, plug and shackle
+    model/, motion/       LockGeometry, springs, easing, RigPose, FrameClock
+  data/                   LockAssetRepository and the .glb summary parser
+  di/AppModule.kt         Koin module
+  ui/
+    bench/                LockBenchViewModel, the screen, touch input, haptics
+    bench/scene/          SceneView scene and LockRig, which poses the glTF nodes
+    components/           shear line panel, control bar, status block, stats pill
+    theme/                colours, type and BenchTheme
 app/src/main/assets/
   models/cutaway_padlock.glb
   environments/studio.hdr

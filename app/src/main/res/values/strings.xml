@@ -1,3 +1,46 @@
 <resources>
     <string name="app_name">Lock Bench</string>
+
+    <!-- Status block -->
+    <string name="bench_title">LOCK BENCH</string>
+    <string name="status_open">OPEN</string>
+    <string name="status_open_hint">Shackle released. Reset to relock.</string>
+    <string name="status_overset">PIN %1$d OVERSET</string>
+    <string name="status_overset_hint">Key pin is past the shear line. Release tension to drop it.</string>
+    <string name="status_locked">LOCKED</string>
+    <string name="status_locked_hint">Turn tension on, then lift pins to the shear line.</string>
+    <string name="status_picking">%1$d / %2$d SET</string>
+    <string name="status_binding_hint">Pin %1$d is binding. Tap it, or drag it up.</string>
+
+    <!-- Control bar -->
+    <string name="control_explode">EXPLODE</string>
+    <string name="control_tension">TENSION</string>
+    <string name="control_ghost">GHOST</string>
+    <string name="control_exploded">EXPLODED</string>
+    <string name="control_reset">RESET</string>
+    <string name="percent">%1$d%%</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+
+    <!-- Camera presets -->
+    <string name="camera_isometric">ISO</string>
+    <string name="camera_keyway">KEYWAY</string>
+    <string name="camera_shear">SHEAR</string>
+
+    <!-- Shear line readout -->
+    <string name="shear_line_title">SHEAR LINE</string>
+    <string name="shear_line_count">%1$d/%2$d</string>
+
+    <!-- Stats pill -->
+    <string name="stats_fps_pending">— fps</string>
+    <string name="stats_idle">idle · on demand</string>
+    <string name="stats_loading">loading model</string>
+
+    <!-- Errors -->
+    <string name="model_load_failed">Model failed to load: %1$s</string>
+
+    <!-- Accessibility -->
+    <string name="cd_explode_slider">Exploded view amount</string>
+    <string name="cd_pin_stacks">Pin stacks. Tap a column to lift that pin to the shear line.</string>
+    <string name="cd_render_stats">Render stats. %1$s</string>
 </resources>

@@ -53,6 +53,7 @@ dependencies {
   implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.activity.compose)
 
   implementation(libs.androidx.compose.ui)
@@ -60,8 +61,18 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   debugImplementation(libs.androidx.compose.ui.tooling)
 
+  // Dependency injection
+  implementation(platform(libs.koin.bom))
+  implementation(libs.koin.android)
+  implementation(libs.koin.androidx.compose)
+
   // 3D: SceneView on Google Filament
   implementation(libs.sceneview)
 
   testImplementation(libs.junit)
+  testImplementation(platform(libs.koin.bom))
+  testImplementation(libs.koin.test)
+  testImplementation(libs.koin.test.junit4)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.org.json)
 }

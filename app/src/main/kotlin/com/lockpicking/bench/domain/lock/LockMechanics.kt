@@ -1,41 +1,6 @@
-package com.lockpicking.bench.lock
+package com.lockpicking.bench.domain.lock
 
 import kotlin.math.max
-
-/**
- * One pin stack, in model units (1 unit = 0.1 m). Read from the glTF node extras.
- *
- * @property liftToShear how far the key pin must rise for the gap between it and its driver
- *   to sit exactly on the shear line.
- * @property springRest the spring's uncompressed length, used to scale it as the driver rises.
- */
-data class PinSpec(
-  val number: Int,
-  val liftToShear: Float,
-  val springRest: Float,
-  val spool: Boolean = false,
-)
-
-enum class PinState {
-  /** Driver straddles the shear line and blocks the plug. */
-  Resting,
-
-  /** Driver is trapped above the shear line on the ledge of the turned plug. */
-  Set,
-
-  /** The key pin itself was pushed across the shear line and is jammed there. */
-  Overset,
-}
-
-sealed interface LockEvent {
-  data class PinSet(val pin: Int, val setCount: Int) : LockEvent
-  data class PinOverset(val pin: Int) : LockEvent
-
-  /** Tension came off with pins set: every driver falls back. */
-  data object Dropped : LockEvent
-  data object Opened : LockEvent
-  data object Relocked : LockEvent
-}
 
 /**
  * The lock as a state machine: no rendering, no Android, so it runs in a plain unit test.
@@ -53,7 +18,7 @@ class LockMechanics(
   /** Pin indices in the order they bind. */
   val bindingOrder: List<Int> = DEFAULT_BINDING_ORDER.filter { it < pins.size },
   private val onEvent: (LockEvent) -> Unit = {},
-) {
+) : LockReadout {
   init {
     require(bindingOrder.sorted() == pins.indices.toList()) { "bindingOrder must name each pin once" }
   }
@@ -64,12 +29,22 @@ class LockMechanics(
     private set
 
   /** How far each key pin has risen from rest. */
-  val keyLift = FloatArray(pins.size)
+  private val keyLifts = FloatArray(pins.size)
 
   /** How far each driver has risen from rest. Never below its key pin. */
-  val driverLift = FloatArray(pins.size)
+  private val driverLifts = FloatArray(pins.size)
 
-  val states = Array(pins.size) { PinState.Resting }
+  private val pinStates = Array(pins.size) { PinState.Resting }
+
+  override val pinCount: Int get() = pins.size
+
+  override fun pin(index: Int): PinSpec = pins[index]
+
+  override fun keyLift(index: Int): Float = keyLifts[index]
+
+  override fun driverLift(index: Int): Float = driverLifts[index]
+
+  override fun state(index: Int): PinState = pinStates[index]
 
   /** The pin the pick is under, or -1. */
   var heldPin = -1
@@ -78,11 +53,14 @@ class LockMechanics(
   /** True from the moment the held pin sets until the pick lets go: the window for oversetting. */
   private var heldSetThisPush = false
 
-  val setCount: Int get() = states.count { it == PinState.Set }
+  val setCount: Int get() = pinStates.count { it == PinState.Set }
+
+  /** The pin jammed past the shear line, or -1. */
+  val oversetPin: Int get() = pinStates.indexOf(PinState.Overset)
 
   /** The pin currently binding, or -1 when there is no tension or the lock is open. */
   val bindingPin: Int
-    get() = if (!tension || opened) -1 else bindingOrder.firstOrNull { states[it] != PinState.Set } ?: -1
+    get() = if (!tension || opened) -1 else bindingOrder.firstOrNull { pinStates[it] != PinState.Set } ?: -1
 
   /** Unsigned plug rotation the mechanism calls for, in degrees. */
   val plugDegrees: Float
@@ -97,7 +75,7 @@ class LockMechanics(
   /** True while anything is still moving and [step] has work to do. */
   val isSettling: Boolean
     get() = pins.indices.any { i ->
-      heldPin != i && states[i] != PinState.Overset && (keyLift[i] > 0f || driverLift[i] > driverFloor(i))
+      heldPin != i && pinStates[i] != PinState.Overset && (keyLifts[i] > 0f || driverLifts[i] > driverFloor(i))
     }
 
   /** Push [pin]'s key pin to [lift] with the pick. Call repeatedly while dragging. */
@@ -108,20 +86,20 @@ class LockMechanics(
       heldSetThisPush = false
     }
     val shear = pins[pin].liftToShear
-    when (states[pin]) {
+    when (pinStates[pin]) {
       // Jammed against the bible: the pick cannot move it.
       PinState.Overset -> return
       PinState.Set -> {
         if (!heldSetThisPush) {
           // The plug has turned under this driver, so the key pin has nowhere to go past the
           // shear line: its chamber no longer lines up.
-          keyLift[pin] = lift.coerceIn(0f, shear)
+          keyLifts[pin] = lift.coerceIn(0f, shear)
           return
         }
-        keyLift[pin] = lift.coerceIn(0f, maxLift(pin))
-        if (keyLift[pin] > shear + OVERSET_MARGIN) {
-          states[pin] = PinState.Overset
-          driverLift[pin] = keyLift[pin]
+        keyLifts[pin] = lift.coerceIn(0f, maxLift(pin))
+        if (keyLifts[pin] > shear + OVERSET_MARGIN) {
+          pinStates[pin] = PinState.Overset
+          driverLifts[pin] = keyLifts[pin]
           onEvent(LockEvent.PinOverset(pin))
         }
         return
@@ -135,11 +113,11 @@ class LockMechanics(
       // A fast drag can jump the whole set window in one event; give the first crossing to
       // the set, and let only a deliberate further push overset.
       target = target.coerceAtMost(shear + OVERSET_MARGIN)
-      states[pin] = PinState.Set
+      pinStates[pin] = PinState.Set
       heldSetThisPush = true
-      keyLift[pin] = target
-      driverLift[pin] = max(driverLift[pin], target)
-      if (states.all { it == PinState.Set }) {
+      keyLifts[pin] = target
+      driverLifts[pin] = max(driverLifts[pin], target)
+      if (pinStates.all { it == PinState.Set }) {
         opened = true
         heldPin = -1
         heldSetThisPush = false
@@ -149,8 +127,8 @@ class LockMechanics(
       }
       return
     }
-    keyLift[pin] = target
-    driverLift[pin] = max(driverLift[pin], target)
+    keyLifts[pin] = target
+    driverLifts[pin] = max(driverLifts[pin], target)
   }
 
   /** The pick lets go; the pin it was under is back in the hands of its spring. */
@@ -162,8 +140,8 @@ class LockMechanics(
   fun applyTension(on: Boolean) {
     if (tension == on || opened) return
     tension = on
-    if (!on && states.any { it != PinState.Resting }) {
-      states.fill(PinState.Resting)
+    if (!on && pinStates.any { it != PinState.Resting }) {
+      pinStates.fill(PinState.Resting)
       heldSetThisPush = false
       onEvent(LockEvent.Dropped)
     }
@@ -176,7 +154,7 @@ class LockMechanics(
     tension = false
     heldPin = -1
     heldSetThisPush = false
-    states.fill(PinState.Resting)
+    pinStates.fill(PinState.Resting)
     if (wasOpen) onEvent(LockEvent.Relocked)
   }
 
@@ -184,15 +162,15 @@ class LockMechanics(
   fun step(dt: Float) {
     val fall = FALL_SPEED * dt
     for (i in pins.indices) {
-      if (states[i] == PinState.Overset) continue
-      if (heldPin != i) keyLift[i] = max(0f, keyLift[i] - fall)
-      driverLift[i] = max(driverFloor(i), driverLift[i] - fall)
+      if (pinStates[i] == PinState.Overset) continue
+      if (heldPin != i) keyLifts[i] = max(0f, keyLifts[i] - fall)
+      driverLifts[i] = max(driverFloor(i), driverLifts[i] - fall)
     }
   }
 
   /** The lowest a driver can sit: on its key pin, or on the plug's ledge once set. */
   private fun driverFloor(i: Int): Float =
-    max(keyLift[i], if (states[i] == PinState.Set) pins[i].liftToShear else 0f)
+    max(keyLifts[i], if (pinStates[i] == PinState.Set) pins[i].liftToShear else 0f)
 
   companion object {
     /** Pins 3, 1, 4, 2 — an arbitrary but fixed tolerance stack-up. */

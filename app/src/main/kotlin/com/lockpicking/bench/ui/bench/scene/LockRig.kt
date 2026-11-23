@@ -1,7 +1,12 @@
-package com.lockpicking.bench.lock
+package com.lockpicking.bench.ui.bench.scene
 
 import android.util.Log
 import com.google.android.filament.MaterialInstance
+import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.lock.LockReadout
+import com.lockpicking.bench.domain.lock.PinSpec
+import com.lockpicking.bench.domain.model.LockGeometry
+import com.lockpicking.bench.domain.motion.RigPose
 import io.github.sceneview.collision.Box
 import io.github.sceneview.collision.HitResult
 import io.github.sceneview.collision.Vector3
@@ -15,33 +20,14 @@ import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.atan2
 
-/** Everything about the model's pose that is not pin travel. Written by the animation loop. */
-class RigPose {
-  /** Signed plug rotation about Z, degrees. */
-  var plugDegrees = 0f
-
-  /** 0 = assembled, 1 = fully exploded. */
-  var explode = 0f
-  var shackleLift = 0f
-  var shackleSwingDegrees = 0f
-
-  /** 0 = wrench withdrawn (hidden), 1 = seated in the keyway. */
-  var wrenchSeat = 0f
-
-  /** World Z and height of the hook tip. */
-  var pickZ = 0f
-  var pickY = 0f
-
-  /** Housing opacity: 1 = solid, lower = ghosted. */
-  var bodyAlpha = 1f
-}
-
 /**
  * Binds the named nodes of `cutaway_padlock.glb` and poses them.
  *
  * The .glb is the source of truth for geometry: rest positions are captured from the nodes, and
  * the travel each part needs comes from the glTF `extras` the Blender script wrote. Nothing
- * here knows a dimension of the lock.
+ * here knows a dimension of the lock: what the rest of the app needs is handed out as [geometry].
+ *
+ * Lives and dies with the scene's Filament engine, so only the composition holds one.
  */
 class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
@@ -76,9 +62,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     modelNode.nodes.mapNotNull { node -> node.name?.let { it to node } }.toMap()
 
   /** Names the contract requires that the file does not have. Empty when the asset is good. */
-  val missing: List<String> = REQUIRED.filterNot { it in byName }
+  private val missing: List<String> = REQUIRED.filterNot { it in byName }
 
-  val nodeNames: List<String> = byName.keys.sorted()
+  private val nodeNames: List<String> = byName.keys.sorted()
 
   private val body = part("Body_Cutaway")
   private val shackle = part("Shackle")
@@ -92,36 +78,32 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private val plugExtras = extras(plug.node)
 
   /** Height of the key pin tips at rest. */
-  val pinRestY: Float = plugExtras.optDouble("pin_rest_y", plug.rest.y.toDouble()).toFloat()
+  private val pinRestY: Float = plugExtras.optDouble("pin_rest_y", plug.rest.y.toDouble()).toFloat()
   private val pickFulcrumZ: Float = plugExtras.optDouble("pick_fulcrum_z", 0.135).toFloat()
 
-  /** Heights the 2D shear-line readout needs to draw the stacks to scale. */
-  val shearY: Float = plugExtras.optDouble("shear_y", 0.07).toFloat()
-  val chamberTop: Float = plugExtras.optDouble("chamber_top", 0.25).toFloat()
-  val driverLength: Float = plugExtras.optDouble("driver_length", 0.06).toFloat()
-
-  /** Signed rotation of a fully turned plug. */
-  val openDegrees: Float = plugExtras.optDouble("open_degrees", -90.0).toFloat()
-
-  /** How far the shackle must rise for its toe to clear the housing. */
-  val shackleTravel: Float =
-    extras(shackle.node).optDouble("toe_engagement", 0.055).toFloat() + SHACKLE_CLEARANCE
-
-  val pinSpecs: List<PinSpec> = (0 until PIN_COUNT).map { i ->
-    PinSpec(
-      number = i + 1,
-      liftToShear = extras(keyPins[i].node).getDouble("lift_to_shear").toFloat(),
-      springRest = extras(springs[i].node).getDouble("rest_length").toFloat(),
-      spool = extras(driverPins[i].node).optBoolean("spool", false),
-    )
-  }
-
-  /** World Z of each pin stack. The plug sits at the origin, so plug-local Z is world Z. */
-  val pinZ: List<Float> = keyPins.map { it.rest.z }
-
-  /** Where the pick waits when no pin is selected, as authored. */
-  val pickParkedZ: Float = pick.rest.z
-  val pickParkedY: Float = pick.rest.y
+  /** The lock's dimensions as the .glb authors them. */
+  val geometry: LockGeometry = LockGeometry(
+    pinSpecs = (0 until PIN_COUNT).map { i ->
+      PinSpec(
+        number = i + 1,
+        liftToShear = extras(keyPins[i].node).getDouble("lift_to_shear").toFloat(),
+        springRest = extras(springs[i].node).getDouble("rest_length").toFloat(),
+        spool = extras(driverPins[i].node).optBoolean("spool", false),
+      )
+    },
+    // The plug sits at the origin, so plug-local Z is world Z.
+    pinZ = keyPins.map { it.rest.z },
+    pinNodeNames = (1..PIN_COUNT).map { "KeyPin_$it" },
+    pinRestY = pinRestY,
+    shearY = plugExtras.optDouble("shear_y", 0.07).toFloat(),
+    chamberTop = plugExtras.optDouble("chamber_top", 0.25).toFloat(),
+    driverLength = plugExtras.optDouble("driver_length", 0.06).toFloat(),
+    openDegrees = plugExtras.optDouble("open_degrees", -90.0).toFloat(),
+    shackleTravel = extras(shackle.node).optDouble("toe_engagement", 0.055).toFloat() + SHACKLE_CLEARANCE,
+    // Where the pick waits when no pin is selected, as authored.
+    pickParkedZ = pick.rest.z,
+    pickParkedY = pick.rest.y,
+  )
 
   private val bodyMaterials: List<Pair<MaterialInstance, FloatArray>> =
     (body.node as? RenderableNode)?.materialInstances.orEmpty().map { instance ->
@@ -152,13 +134,11 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     return -1
   }
 
-  fun nodeName(pin: Int): String = "KeyPin_${pin + 1}"
-
   /**
    * Poses every part. Returns true if the housing material changed — a write straight into a
    * Filament MaterialInstance, which SceneView cannot see and the caller must invalidate for.
    */
-  fun apply(lock: LockMechanics, pose: RigPose): Boolean {
+  fun apply(pose: RigPose, pins: LockReadout): Boolean {
     val e = pose.explode
     // The shackle clears first, then the housing slides off sideways.
     val shackleOut = smooth(e / 0.6f)
@@ -179,12 +159,13 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
     for (i in 0 until PIN_COUNT) {
       // Key pins are children of the plug: their Y is the plug's, and they turn with it.
-      keyPins[i].offset(y = lock.keyLift[i] + 0.05f * e)
-      driverPins[i].offset(y = lock.driverLift[i] + 0.15f * e)
+      val driverLift = pins.driverLift(i)
+      keyPins[i].offset(y = pins.keyLift(i) + 0.05f * e)
+      driverPins[i].offset(y = driverLift + 0.15f * e)
       springs[i].offset(y = 0.24f * e)
       // The spring hangs from the top of the bible, so scaling Y squeezes it against the roof.
-      val rest = lock.pins[i].springRest
-      val squeeze = ((rest - lock.driverLift[i]) / rest).coerceIn(0.25f, 1f)
+      val rest = pins.pin(i).springRest
+      val squeeze = ((rest - driverLift) / rest).coerceIn(0.25f, 1f)
       if (differs(appliedSpring[i], squeeze)) {
         appliedSpring[i] = squeeze
         springs[i].node.scale = Scale(1f, squeeze, 1f)
@@ -229,13 +210,13 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
   companion object {
     private const val TAG = "LockRig"
-    const val PIN_COUNT = 4
+    private const val PIN_COUNT = LockGeometry.PIN_COUNT
     private const val EPS = 1e-5f
 
     /** Extra rise beyond the toe's engagement so the swing visibly clears the housing. */
     private const val SHACKLE_CLEARANCE = 0.022f
 
-    val REQUIRED: List<String> = listOf("Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick") +
+    private val REQUIRED: List<String> = listOf("Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick") +
       listOf("KeyPin", "DriverPin", "Spring").flatMap { kind -> (1..PIN_COUNT).map { "${kind}_$it" } }
 
     private fun differs(a: Float, b: Float) = a.isNaN() || abs(a - b) > EPS

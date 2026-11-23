@@ -9,11 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.lockpicking.bench.ui.Bench
-import com.lockpicking.bench.ui.LockBenchScreen
+import com.lockpicking.bench.ui.bench.LockBenchRoute
+import com.lockpicking.bench.ui.theme.BenchTheme
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,8 +37,8 @@ class MainActivity : ComponentActivity() {
       navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
     )
     setContent {
-      MaterialTheme(colorScheme = darkColorScheme(primary = Bench.Brass, background = Bench.Ink, surface = Bench.Ink)) {
-        LockBenchScreen()
+      BenchTheme {
+        LockBenchRoute()
       }
     }
   }
