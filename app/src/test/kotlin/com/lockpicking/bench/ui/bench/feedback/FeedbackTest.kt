@@ -2,12 +2,10 @@ package com.lockpicking.bench.ui.bench.feedback
 
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 class FeedbackTest {
 
@@ -59,32 +57,4 @@ class FeedbackTest {
     }
     assertNull("the shackle closing is heard, not felt", cueFor(LockEvent.Relocked, 0f).haptic)
   }
-
-  @Test
-  fun `every sound renders to a short clip that uses the headroom without clipping`() {
-    for (sound in LockSound.entries) {
-      val pcm = SoundSynth.render(sound)
-      val seconds = pcm.size / SoundSynth.SAMPLE_RATE.toFloat()
-      assertTrue("$sound is $seconds s", seconds > 0.005f && seconds < 0.6f)
-      val peak = pcm.maxOf { abs(it.toInt()) }
-      assertTrue("$sound peaks at $peak", peak in 20_000..Short.MAX_VALUE)
-      assertEquals("$sound ends in silence, so cutting it never clicks", 0, pcm.last().toInt())
-    }
-  }
-
-  @Test
-  fun `a sound is the same every time it is rendered`() {
-    assertArrayEquals(SoundSynth.render(LockSound.Rattle), SoundSynth.render(LockSound.Rattle))
-  }
-
-  @Test
-  fun `a set is short and bright and a false set long and low`() {
-    val click = SoundSynth.render(LockSound.SetClick)
-    val clunk = SoundSynth.render(LockSound.FalseSetClunk)
-    assertTrue(clunk.size > 2 * click.size)
-    assertTrue(crossings(click) / click.size.toFloat() > 2f * crossings(clunk) / clunk.size)
-  }
-
-  /** Zero crossings: a rough measure of how high a sound sits. */
-  private fun crossings(pcm: ShortArray): Int = (1 until pcm.size).count { (pcm[it - 1] < 0) != (pcm[it] < 0) }
 }

@@ -30,7 +30,7 @@ enum class Haptic {
   Release,
 }
 
-/** The sounds the lock makes. [SoundSynth] has the recipe for each. */
+/** The sounds the lock makes. [LockSoundEngine] has the recording for each. */
 enum class LockSound { SetClick, FalseSetClunk, CounterTick, Blocked, Grit, Rattle, Jam, SlipBack, Open, Relock }
 
 /** What one lock event feels and sounds like. [strength] is 0..1 and scales both. */

@@ -21,7 +21,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +40,7 @@ import com.lockpicking.bench.R
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
 import com.lockpicking.bench.ui.bench.feedback.LockHaptics
-import com.lockpicking.bench.ui.bench.feedback.LockSounds
+import com.lockpicking.bench.ui.bench.feedback.LockSoundEngine
 import com.lockpicking.bench.ui.bench.feedback.cueFor
 import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
 import com.lockpicking.bench.ui.bench.input.BenchTouchRouter
@@ -103,9 +102,8 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   val motionTick = viewModel.motionTick.collectAsStateWithLifecycle()
 
   val context = LocalContext.current
-  val scope = rememberCoroutineScope()
   val haptics = remember(context) { LockHaptics(context.applicationContext) }
-  val sounds = remember { LockSounds(scope) }
+  val sounds = remember(context) { LockSoundEngine(context) }
   DisposableEffect(sounds) { onDispose { sounds.release() } }
   val feel = remember(haptics, sounds) {
     { feedback: LockFeedback ->
