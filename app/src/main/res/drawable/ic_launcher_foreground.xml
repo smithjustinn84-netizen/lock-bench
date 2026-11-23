@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Soft drop shadow under padlock body -->
+    <path
+        android:fillColor="#55000000"
+        android:pathData="M36,46.5 L72,46.5 A5,5 0 0,1 77,51.5 L77,75.5 A5,5 0 0,1 72,80.5 L36,80.5 A5,5 0 0,1 31,75.5 L31,51.5 A5,5 0 0,1 36,46.5 Z" />
+
+    <!-- Machined nickel/steel shackle -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M42,46.5 L42,38 A12,12 0 0,1 66,38 L66,46.5"
+        android:strokeWidth="5.2"
+        android:strokeLineCap="butt">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:endX="66"
+                android:endY="46"
+                android:startX="42"
+                android:startY="26"
+                android:type="linear">
+                <item
+                    android:color="#E4E7EC"
+                    android:offset="0.0" />
+                <item
+                    android:color="#B9BDC4"
+                    android:offset="0.52" />
+                <item
+                    android:color="#7C838E"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Specular highlight along top of shackle -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M43.2,38 A10.8,10.8 0 0,1 62.2,31.2"
+        android:strokeAlpha="0.55"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.0" />
+
+    <!-- Padlock body -->
+    <path android:pathData="M36,44.5 L72,44.5 A5,5 0 0,1 77,49.5 L77,73.5 A5,5 0 0,1 72,78.5 L36,78.5 A5,5 0 0,1 31,73.5 L31,49.5 A5,5 0 0,1 36,44.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="54"
+                android:endY="78.5"
+                android:startX="54"
+                android:startY="44.5"
+                android:type="linear">
+                <item
+                    android:color="#282F3B"
+                    android:offset="0.0" />
+                <item
+                    android:color="#1A1F28"
+                    android:offset="0.55" />
+                <item
+                    android:color="#12161D"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Machined bevel stroke around padlock body -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M36,44.5 L72,44.5 A5,5 0 0,1 77,49.5 L77,73.5 A5,5 0 0,1 72,78.5 L36,78.5 A5,5 0 0,1 31,73.5 L31,49.5 A5,5 0 0,1 36,44.5 Z"
+        android:strokeColor="#434C5C"
+        android:strokeWidth="1.0" />
+
+    <!-- Subtle top chamfer glint -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M36.5,45.5 L71.5,45.5"
+        android:strokeAlpha="0.45"
+        android:strokeColor="#8A94A6"
+        android:strokeLineCap="round"
+        android:strokeWidth="0.7" />
+
+    <!-- Cutaway window recess -->
+    <path
+        android:fillColor="#0B0D10"
+        android:pathData="M37.5,48.5 L70.5,48.5 A2.5,2.5 0 0,1 73,51 L73,72 A2.5,2.5 0 0,1 70.5,74.5 L37.5,74.5 A2.5,2.5 0 0,1 35,72 L35,51 A2.5,2.5 0 0,1 37.5,48.5 Z"
+        android:strokeColor="#2B3038"
+        android:strokeWidth="0.8" />
+
+    <!-- 4 recessed pin chamber bores -->
+    <path
+        android:fillColor="#13171F"
+        android:pathData="M37.5,49.3 h6 v24.4 h-6 z M46.5,49.3 h6 v24.4 h-6 z M55.5,49.3 h6 v24.4 h-6 z M64.5,49.3 h6 v24.4 h-6 z" />
+
+    <!-- Bronze coil springs (roof of bible to driver pins) -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M40.5,49.6 L42.1,50.5 L38.9,51.4 L42.1,52.3 L38.9,53.2 L40.5,54.0 M49.5,49.6 L51.1,50.5 L47.9,51.4 L51.1,52.3 L47.9,53.2 L49.5,54.0 M58.5,49.6 L60.1,50.5 L56.9,51.4 L60.1,52.3 L56.9,53.2 L58.5,54.0 M67.5,49.6 L69.1,50.5 L65.9,51.4 L69.1,52.3 L65.9,53.2 L67.5,54.0"
+        android:strokeColor="#B8733A"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="0.85" />
+
+    <!-- Nickel driver pins (Pin 2 is a spool driver with a machined waist) -->
+    <path android:pathData="M38.2,54.2 h4.6 a0.6,0.6 0 0,1 0.6,0.6 v6.7 a0.6,0.6 0 0,1 -0.6,0.6 h-4.6 a0.6,0.6 0 0,1 -0.6,-0.6 v-6.7 a0.6,0.6 0 0,1 0.6,-0.6 z M47.2,54.2 h4.6 a0.6,0.6 0 0,1 0.6,0.6 v1.8 h-1.1 v3.1 h1.1 v1.8 a0.6,0.6 0 0,1 -0.6,0.6 h-4.6 a0.6,0.6 0 0,1 -0.6,-0.6 v-1.8 h1.1 v-3.1 h-1.1 v-1.8 a0.6,0.6 0 0,1 0.6,-0.6 z M56.2,54.2 h4.6 a0.6,0.6 0 0,1 0.6,0.6 v6.7 a0.6,0.6 0 0,1 -0.6,0.6 h-4.6 a0.6,0.6 0 0,1 -0.6,-0.6 v-6.7 a0.6,0.6 0 0,1 0.6,-0.6 z M65.2,54.2 h4.6 a0.6,0.6 0 0,1 0.6,0.6 v6.7 a0.6,0.6 0 0,1 -0.6,0.6 h-4.6 a0.6,0.6 0 0,1 -0.6,-0.6 v-6.7 a0.6,0.6 0 0,1 0.6,-0.6 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="54"
+                android:endY="62.2"
+                android:startX="54"
+                android:startY="54.2"
+                android:type="linear">
+                <item
+                    android:color="#D2D6DC"
+                    android:offset="0.0" />
+                <item
+                    android:color="#9EA4AF"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Brass key pins (varied bitting lengths with tapered tips) -->
+    <path android:pathData="M37.6,63.9 L43.4,63.9 L43.4,70.2 L41.5,71.8 L39.5,71.8 L37.6,70.2 Z M46.6,63.9 L52.4,63.9 L52.4,67.8 L50.5,69.4 L48.5,69.4 L46.6,67.8 Z M55.6,63.9 L61.4,63.9 L61.4,71.4 L59.5,73.0 L57.5,73.0 L55.6,71.4 Z M64.6,63.9 L70.4,63.9 L70.4,69.0 L68.5,70.6 L66.5,70.6 L64.6,69.0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="54"
+                android:endY="73.0"
+                android:startX="54"
+                android:startY="63.9"
+                android:type="linear">
+                <item
+                    android:color="#F4CF7B"
+                    android:offset="0.0" />
+                <item
+                    android:color="#E3B45A"
+                    android:offset="0.48" />
+                <item
+                    android:color="#B98934"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glowing set shear line across the 4 pin stacks -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M35.4,63.0 L72.6,63.0"
+        android:strokeAlpha="0.30"
+        android:strokeColor="#62D391"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.6" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M35.4,63.0 L72.6,63.0"
+        android:strokeColor="#62D391"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.05" />
+</vector>
