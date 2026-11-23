@@ -1,22 +1,57 @@
 package com.lockpicking.bench.domain.bench
 
 import com.lockpicking.bench.domain.lock.LockEvent
+import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.PinState
-import com.lockpicking.bench.testing.bindingOrder
+import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.testing.testGeometry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 class BenchSimulationTest {
   private val events = mutableListOf<LockEvent>()
   private val sim = BenchSimulation(testGeometry) { events += it }
 
+  /** The events that mark something happening, without the scrape of a pin being lifted. */
+  private val milestones get() = events.filterNot { it is LockEvent.Grit }
+
   /** Steps at 60 fps until nothing moves. Fails if the bench never settles. */
   private fun settle() {
     repeat(MAX_FRAMES) { if (!sim.advance(FRAME)) return }
     throw AssertionError("bench still moving after $MAX_FRAMES frames")
+  }
+
+  private fun pull(amount: Float) {
+    sim.pullWrench(amount)
+    settle()
+  }
+
+  /** Taps whichever pin is binding until the lock opens: light enough for the spools to pass. */
+  private fun openLock() {
+    pull(EASED)
+    repeat(2 * testGeometry.pinCount) {
+      if (sim.snapshot().opened) return@repeat
+      sim.nudge(sim.snapshot().bindingPin)
+      settle()
+    }
+    check(sim.snapshot().opened)
+  }
+
+  /** Sets the two standard pins and lifts pin 2 off its flange: the plug drops into the spools. */
+  private fun dropIntoFalseSet() {
+    repeat(2) {
+      sim.nudge(sim.snapshot().bindingPin)
+      settle()
+    }
+    check(sim.snapshot().setCount == 2)
+    sim.hold(1, 0.010f)
+    settle()
+    sim.letGo()
+    settle()
+    check(sim.snapshot().falseSetPin == 2)
   }
 
   @Test
@@ -25,55 +60,172 @@ class BenchSimulationTest {
   }
 
   @Test
-  fun `tension seats the wrench`() {
-    sim.setTension(true)
-    settle()
-    assertTrue(sim.snapshot().tension)
+  fun `a hand on the wrench seats it and a pull puts torque on the plug`() {
+    pull(0f)
     assertEquals(1f, sim.pose.wrenchSeat, 0f)
+    assertEquals(TorqueBand.Slack, sim.snapshot().band)
+
+    pull(0.5f)
+    assertEquals(TorqueBand.Firm, sim.snapshot().band)
+    assertEquals(0.5f, sim.pose.torque, 0f)
+    assertTrue("the plug takes up and the wrench springs round the same way", sim.pose.plugDegrees < 0f && sim.pose.wrenchFlexDegrees < 0f)
+  }
+
+  @Test
+  fun `torque moving bumps the motion tick and a steady wrench lets the bench sleep`() {
+    sim.pullWrench(0.5f)
+    val before = sim.motionTick
+    sim.advance(FRAME)
+    assertTrue(sim.motionTick > before)
+    settle()
+    val settled = sim.motionTick
+    assertFalse(sim.advance(FRAME))
+    assertEquals(settled, sim.motionTick)
+  }
+
+  @Test
+  fun `letting go of the wrench drops every set`() {
+    pull(0.5f)
+    sim.nudge(sim.snapshot().bindingPin)
+    settle()
+    assertEquals(1, sim.snapshot().setCount)
+    sim.releaseWrench()
+    settle()
+    assertEquals(0, sim.snapshot().setCount)
+    assertEquals(TorqueBand.Slack, sim.snapshot().band)
+    assertEquals(0f, sim.pose.wrenchSeat, 0f)
+    assertEquals(0f, sim.pose.plugDegrees, 0f)
+    assertEquals(LockEvent.Dropped, events.last())
   }
 
   @Test
   fun `a nudge lifts the binding pin to the shear line and sets it`() {
-    sim.setTension(true)
+    pull(0.5f)
     val binding = sim.snapshot().bindingPin
     sim.nudge(binding)
     settle()
     assertEquals(PinState.Set, sim.readout.state(binding))
     assertEquals(1, sim.snapshot().setCount)
     assertEquals(1, sim.snapshot().setPulse)
-    assertTrue(events.single() is LockEvent.PinSet)
+    assertTrue(milestones.single() is LockEvent.PinSet)
   }
 
   @Test
   fun `a nudge on a pin that is not binding sets nothing`() {
-    sim.setTension(true)
-    sim.nudge(1)
+    pull(0.5f)
+    sim.nudge(3)
     settle()
     assertEquals(0, sim.snapshot().setCount)
-    assertEquals(0f, sim.readout.keyLift(1), 0f)
+    assertEquals(0f, sim.readout.keyLift(3), 0f)
   }
 
   @Test
-  fun `picking in binding order opens the lock and swings the shackle`() {
-    sim.setTension(true)
-    for (pin in bindingOrder) {
-      sim.nudge(pin)
+  fun `a binding pin drags behind the hand and still sets`() {
+    pull(0.6f)
+    val shear = testGeometry.pinSpecs[0].liftToShear
+    sim.hold(0, 0f)
+    settle()
+    sim.hold(0, shear)
+    sim.advance(FRAME)
+    val afterOneFrame = sim.readout.keyLift(0)
+    assertTrue("it has started but not arrived", afterOneFrame > 0f && afterOneFrame < shear)
+    settle()
+    assertEquals(PinState.Set, sim.readout.state(0))
+  }
+
+  @Test
+  fun `a hand ahead of a dragging pin does not overset it`() {
+    pull(0.6f)
+    sim.hold(0, 0f)
+    settle()
+    // The finger goes straight to the top of the travel; the pin gets there when it gets there.
+    sim.hold(0, sim.maxLift(0))
+    settle()
+    assertEquals(PinState.Set, sim.readout.state(0))
+    assertEquals(-1, sim.snapshot().oversetPin)
+  }
+
+  @Test
+  fun `pushing on after the set oversets`() {
+    pull(0.6f)
+    val shear = testGeometry.pinSpecs[0].liftToShear
+    sim.hold(0, 0f)
+    settle()
+    sim.hold(0, shear)
+    settle()
+    assertEquals(PinState.Set, sim.readout.state(0))
+    sim.hold(0, shear + 0.016f)
+    settle()
+    assertEquals(0, sim.snapshot().oversetPin)
+  }
+
+  @Test
+  fun `a false set swings the plug well past the sets`() {
+    pull(0.5f)
+    repeat(2) {
+      sim.nudge(sim.snapshot().bindingPin)
       settle()
     }
+    val twoSets = abs(sim.pose.plugDegrees)
+    sim.hold(1, 0.010f)
+    settle()
+    assertEquals(2, sim.snapshot().falseSetPin)
+    assertEquals(LockMechanics.FALSE_SET_DEGREES, abs(sim.pose.plugDegrees) - twoSets, 0.05f)
+    assertTrue(events.any { it is LockEvent.FalseSet })
+  }
+
+  @Test
+  fun `a tap on a spool under firm torque is blocked and sets nothing`() {
+    pull(0.5f)
+    dropIntoFalseSet()
+    sim.nudge(2)
+    settle()
+    assertEquals(PinState.Resting, sim.readout.state(2))
+    assertTrue(events.contains(LockEvent.SpoolBlocked(2)))
+    assertEquals("the pick has let go", -1, sim.snapshot().blockedPin)
+  }
+
+  @Test
+  fun `easing the wrench while the pick holds a spool turns the plug back and sets it`() {
+    pull(0.5f)
+    dropIntoFalseSet()
+    val falseSet = abs(sim.pose.plugDegrees)
+    sim.hold(2, 0f)
+    settle()
+    sim.hold(2, testGeometry.pinSpecs[2].liftToShear)
+    settle()
+    assertEquals("held against the flange, the bench is still", 2, sim.snapshot().blockedPin)
+    assertEquals(PinState.Resting, sim.readout.state(2))
+
+    sim.pullWrench(EASED)
+    // A few frames in, the plug is on its way back but the pin has not set.
+    repeat(12) { sim.advance(FRAME) }
+    assertTrue(abs(sim.pose.plugDegrees) < falseSet - 1f)
+    assertEquals(PinState.Resting, sim.readout.state(2))
+    settle()
+    assertEquals(PinState.Set, sim.readout.state(2))
+    assertEquals(-1, sim.snapshot().blockedPin)
+    assertEquals(listOf(1, 2, 3, 4), events.filterIsInstance<LockEvent.CounterRotation>().map { it.step })
+  }
+
+  @Test
+  fun `picking the binding pin each time opens the lock and swings the shackle`() {
+    openLock()
     val snapshot = sim.snapshot()
-    assertTrue(snapshot.opened)
     assertEquals(-1, snapshot.selectedPin)
     assertEquals(LockEvent.Opened, events.last())
+    assertEquals(3, events.count { it is LockEvent.PinSet })
     assertEquals(testGeometry.openDegrees, sim.pose.plugDegrees, 0f)
     assertEquals(testGeometry.shackleTravel, sim.pose.shackleLift, 0f)
     assertTrue(sim.pose.shackleSwingDegrees < -70f)
   }
 
   @Test
-  fun `an open lock ignores pin input and tension`() {
+  fun `an open lock ignores the pick and the wrench`() {
     openLock()
     sim.hold(0, 0.01f)
-    sim.setTension(false)
+    sim.releaseWrench()
+    sim.pullWrench(0.5f)
     settle()
     assertEquals(-1, sim.snapshot().selectedPin)
     assertTrue(sim.snapshot().opened)
@@ -89,13 +241,25 @@ class BenchSimulationTest {
     settle()
     val snapshot = sim.snapshot()
     assertFalse(snapshot.opened)
-    assertFalse(snapshot.tension)
+    assertEquals(TorqueBand.Slack, snapshot.band)
     assertEquals(0, snapshot.setCount)
     assertEquals(0f, sim.pose.plugDegrees, 0f)
     assertEquals(0f, sim.pose.shackleLift, 0f)
     assertEquals(0f, sim.pose.shackleSwingDegrees, 0f)
     assertEquals(0f, sim.pose.wrenchSeat, 0f)
     assertEquals(LockEvent.Relocked, events.last())
+  }
+
+  @Test
+  fun `reset takes the torque off a lock that is being picked`() {
+    pull(0.5f)
+    sim.nudge(sim.snapshot().bindingPin)
+    settle()
+    sim.reset()
+    settle()
+    assertEquals(TorqueBand.Slack, sim.snapshot().band)
+    assertEquals(0, sim.snapshot().setCount)
+    assertEquals(0f, sim.pose.torque, 0f)
   }
 
   @Test
@@ -134,17 +298,11 @@ class BenchSimulationTest {
     assertEquals(settled, sim.motionTick)
   }
 
-  private fun openLock() {
-    sim.setTension(true)
-    for (pin in bindingOrder) {
-      sim.nudge(pin)
-      settle()
-    }
-    check(sim.snapshot().opened)
-  }
-
   private companion object {
     const val FRAME = 1f / 60f
     const val MAX_FRAMES = 1200
+
+    /** Light enough that a spool turns the plug back without help. */
+    const val EASED = 0.15f
   }
 }

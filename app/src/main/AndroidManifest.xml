@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- The lock is felt as much as seen: sets, false sets and the plug kicking back are vibration. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:name=".LockBenchApplication"
         android:allowBackup="true"

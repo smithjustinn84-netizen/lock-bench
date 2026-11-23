@@ -22,6 +22,3 @@ val testGeometry = LockGeometry(
   pickParkedZ = 0.20f,
   pickParkedY = -0.01f,
 )
-
-/** Pin indices in the order the default lock binds them. */
-val bindingOrder = listOf(2, 0, 3, 1)

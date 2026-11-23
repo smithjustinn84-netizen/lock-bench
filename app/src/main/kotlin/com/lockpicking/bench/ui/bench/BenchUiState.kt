@@ -1,6 +1,7 @@
 package com.lockpicking.bench.ui.bench
 
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
 
 /**
@@ -13,11 +14,18 @@ data class BenchUiState(
   /** The lock's dimensions, once the 3D model has bound. Null until then. */
   val geometry: LockGeometry? = null,
   val loadError: String? = null,
-  val tension: Boolean = false,
+  /** Where the torque on the wrench sits. The torque itself changes every frame and is not here. */
+  val band: TorqueBand = TorqueBand.Slack,
   val opened: Boolean = false,
   val setCount: Int = 0,
   val bindingPin: Int = -1,
   val oversetPin: Int = -1,
+  /** The spool the plug is hanging on in a false set, or -1. */
+  val falseSetPin: Int = -1,
+  /** The pin the pick is pushing against a stop it cannot pass at this torque, or -1. */
+  val blockedPin: Int = -1,
+  /** Whether the bench names the binding pin and says what the lock is doing. */
+  val hints: Boolean = true,
   val selectedPin: Int = -1,
   /** Bumped when a pin sets, to flash the shear line. */
   val setPulse: Int = 0,
@@ -30,6 +38,9 @@ data class BenchUiState(
   val pinCount: Int get() = geometry?.pinCount ?: LockGeometry.PIN_COUNT
   val exploded: Boolean get() = explode > EXPLODED_AT
 
+  /** True while the wrench is holding the plug against the pins. */
+  val tension: Boolean get() = band != TorqueBand.Slack
+
   companion object {
     const val EXPLODED_AT = 0.5f
   }
@@ -41,14 +52,28 @@ sealed interface BenchStatus {
   data class Overset(val pinNumber: Int) : BenchStatus
   data object Locked : BenchStatus
 
-  /** Tension on and picking; [bindingPinNumber] is null when no pin is binding. */
+  /** So much torque that the binding pin will not lift. */
+  data object Seized : BenchStatus
+
+  /** The pick is on a spool that cannot turn the plug back until the wrench is eased. */
+  data class EaseOff(val pinNumber: Int) : BenchStatus
+
+  /** The plug has dropped into a false set and is hanging on this spool. */
+  data class FalseSet(val pinNumber: Int) : BenchStatus
+
+  /** Tension on and picking; [bindingPinNumber] is null when no pin is named. */
   data class Picking(val setCount: Int, val pinCount: Int, val bindingPinNumber: Int?) : BenchStatus
 }
 
+/** With hints off the headline only counts sets: what the lock is doing is left to feel. */
 fun BenchUiState.status(): BenchStatus = when {
   opened -> BenchStatus.Open
-  oversetPin >= 0 -> BenchStatus.Overset(oversetPin + 1)
   !tension -> BenchStatus.Locked
+  !hints -> BenchStatus.Picking(setCount, pinCount, null)
+  oversetPin >= 0 -> BenchStatus.Overset(oversetPin + 1)
+  band == TorqueBand.Heavy -> BenchStatus.Seized
+  blockedPin >= 0 -> BenchStatus.EaseOff(blockedPin + 1)
+  falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1)
   else -> BenchStatus.Picking(setCount, pinCount, bindingPin.takeIf { it >= 0 }?.plus(1))
 }
 
@@ -59,4 +84,6 @@ data class BenchTelemetry(
   /** Rise of the selected key pin, in millimetres. */
   val selectedLiftMm: Float,
   val plugDegrees: Float,
+  /** Torque on the wrench, 0..1. */
+  val torque: Float,
 )

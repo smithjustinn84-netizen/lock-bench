@@ -18,6 +18,14 @@ class RigPose {
   var wrenchSeat = 0f
     internal set
 
+  /** Torque on the wrench, 0..1. */
+  var torque = 0f
+    internal set
+
+  /** How far the wrench's handle has sprung round ahead of the plug, signed like [plugDegrees]. */
+  var wrenchFlexDegrees = 0f
+    internal set
+
   /** World Z and height of the hook tip. */
   var pickZ = 0f
     internal set

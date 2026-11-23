@@ -13,9 +13,17 @@ import kotlin.math.sign
  * Relocking plays the same stages backwards, and only then lets the drivers fall.
  */
 internal class OpenChoreography(private val geometry: LockGeometry) {
-  private val openSign = sign(geometry.openDegrees)
+  /** Which way the plug turns to open: the sign of every plug angle in the pose. */
+  val openSign = sign(geometry.openDegrees)
 
   private val plug = SpringValue(0f, stiffness = 120f, epsilon = 0.02f)
+
+  /**
+   * The plug while picking. Much stiffer than the opening turn and a touch underdamped, so a
+   * set clicks round, a false set drops, and the plug follows a spool back without lagging.
+   */
+  private val creep = SpringValue(0f, stiffness = 1400f, damping = 52f, epsilon = 0.01f)
+  private var picking = false
   private val shackleLift = SpringValue(0f, stiffness = 320f, damping = 15f, epsilon = 0.0003f)
   private val shackleSwing = SpringValue(0f, stiffness = 42f, epsilon = 0.05f)
 
@@ -43,14 +51,24 @@ internal class OpenChoreography(private val geometry: LockGeometry) {
     plug.target = when {
       open -> geometry.openDegrees
       relocking -> if (shackleLift.value > SHACKLE_SEATED) geometry.openDegrees else 0f
-      else -> openSign * lock.plugDegrees
+      else -> 0f
     }
     if (relocking && plug.target == 0f && abs(plug.value) < PLUG_HOME_DEGREES) {
       relocking = false
       lock.relock()
     }
 
-    var moving = plug.step(dt)
+    val nowPicking = !open && !relocking
+    if (nowPicking && !picking) creep.snap(plug.value)
+    picking = nowPicking
+    var moving = if (picking) {
+      creep.target = openSign * lock.plugDegrees
+      val turning = creep.step(dt)
+      plug.snap(creep.value)
+      turning
+    } else {
+      plug.step(dt)
+    }
     moving = shackleLift.step(dt) or moving
     moving = shackleSwing.step(dt) or moving
     return moving

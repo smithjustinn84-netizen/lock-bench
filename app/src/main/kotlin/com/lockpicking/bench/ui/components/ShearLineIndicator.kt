@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
+import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.model.LockGeometry
@@ -136,6 +137,8 @@ private fun DrawScope.drawPinStack(
   val pinWidth = 0.032f * scale.unit
   val cx = column * (i + 0.5f)
   val left = cx - pinWidth / 2f
+  // In a false set the turned plug has carried the foot of the driver sideways.
+  val cocked = pins.driverTilt(i) * pinWidth * 0.16f
 
   // Chamber: the plug's bore below the shear line, the bible above it.
   drawRoundRect(
@@ -159,14 +162,15 @@ private fun DrawScope.drawPinStack(
     PinState.Resting -> BenchColors.Nickel
   }
   val driverHeight = scale.y(driverBase) - scale.y(driverTop)
-  drawRoundRect(driverColor, Offset(left, scale.y(driverTop)), Size(pinWidth, driverHeight - 1f), CornerRadius(1.5.dp.toPx()))
+  drawRoundRect(driverColor, Offset(left + cocked, scale.y(driverTop)), Size(pinWidth, driverHeight - 1f), CornerRadius(1.5.dp.toPx()))
   if (spec.spool) {
-    // Waist of a spool driver, cut back out of the block.
-    val waist = driverHeight * 0.34f
+    // Waist of a spool driver, cut back out of the block: everything between its two flanges.
+    val flange = LockMechanics.SPOOL_FLANGE * scale.unit
     val inset = pinWidth * 0.22f
-    val mid = (scale.y(driverBase) + scale.y(driverTop)) / 2f
-    drawRect(BenchColors.Ink, Offset(left, mid - waist / 2f), Size(inset, waist))
-    drawRect(BenchColors.Ink, Offset(left + pinWidth - inset, mid - waist / 2f), Size(inset, waist))
+    val waistTop = scale.y(driverTop) + flange
+    val waist = driverHeight - 2f * flange
+    drawRect(BenchColors.Ink, Offset(left + cocked, waistTop), Size(inset, waist))
+    drawRect(BenchColors.Ink, Offset(left + cocked + pinWidth - inset, waistTop), Size(inset, waist))
   }
 
   val keyColor = if (state == PinState.Overset) BenchColors.Fault else BenchColors.Brass

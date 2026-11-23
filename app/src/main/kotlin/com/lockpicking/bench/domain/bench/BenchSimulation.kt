@@ -3,17 +3,23 @@ package com.lockpicking.bench.domain.bench
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
+import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.RigPose
 import com.lockpicking.bench.domain.motion.SpringValue
+import kotlin.math.min
 
 /** The coarse state of the bench: what changes a few times a gesture, not every frame. */
 data class BenchSnapshot(
-  val tension: Boolean,
+  val band: TorqueBand,
   val opened: Boolean,
   val setCount: Int,
   val bindingPin: Int,
   val oversetPin: Int,
+  /** The spool the plug is hanging on in a false set, or -1. */
+  val falseSetPin: Int,
+  /** The pin the pick is pushing against a stop it cannot pass at this torque, or -1. */
+  val blockedPin: Int,
   val selectedPin: Int,
   /** Bumped when a pin sets or the lock opens, to flash the shear line. */
   val setPulse: Int,
@@ -22,7 +28,7 @@ data class BenchSnapshot(
 /**
  * The lock plus everything that moves around it, stepped one display frame at a time.
  *
- * Inputs arrive as intents ([hold], [nudge], [setTension], …); [advance] turns them into pin
+ * Inputs arrive as intents ([hold], [nudge], [pullWrench], …); [advance] turns them into pin
  * travel and a [pose]. It returns false once nothing is moving, so the caller can stop asking
  * for frames: the scene renders on demand and a settled bench should cost nothing.
  *
@@ -32,11 +38,13 @@ class BenchSimulation(
   val geometry: LockGeometry,
   private val onEvent: (LockEvent) -> Unit = {},
 ) {
-  private val lock = LockMechanics(geometry.pinSpecs, onEvent = ::handle)
+  private val lock = LockMechanics(geometry.pinSpecs, driverLength = geometry.driverLength, onEvent = ::handle)
   private val choreography = OpenChoreography(geometry)
   private val pick = PickMotion(geometry)
   private val nudgeScript = NudgeScript()
 
+  /** The hand on the wrench: quick, but it cannot change the torque in no time at all. */
+  private val torque = SpringValue(0f, stiffness = 700f, epsilon = 0.002f)
   private val wrench = SpringValue(0f, stiffness = 150f, epsilon = 0.002f)
   private val explode = SpringValue(0f, stiffness = 170f, epsilon = 0.0005f)
   private val bodyAlpha = SpringValue(1f, stiffness = 90f, epsilon = 0.003f)
@@ -46,15 +54,24 @@ class BenchSimulation(
 
   val pose = RigPose()
 
-  /** Bumped on every frame in which a pin moved, so a pin readout knows to redraw. */
+  /** Bumped on every frame in which a pin, the plug or the torque moved, so a readout knows to redraw. */
   var motionTick = 0
     private set
 
   /** The pin the user is pushing and how far, or -1. Applied once the pick is under it. */
   private var requestedPin = -1
   private var requestedLift = 0f
+
+  /**
+   * Where the hand was when the held pin set, or NaN. From then on only travel beyond that
+   * point pushes the pin on, so a hand that was ahead of a dragging pin does not overset it.
+   */
+  private var setOrigin = Float.NaN
+  private var catchingUp = false
   private var selectedPin = -1
   private var setPulse = 0
+  private var wrenchHeld = false
+  private var torqueTarget = 0f
   private var explodeTarget = 0f
   private var ghost = false
 
@@ -80,27 +97,41 @@ class BenchSimulation(
 
   fun letGo() {
     nudgeScript.cancel()
-    requestedPin = -1
+    clearRequest()
   }
 
-  /** A tap: slide the pick under [pin], lift it exactly to the shear line, and let go. */
+  /** A tap: slide the pick under [pin], lift it to the shear line, and let go. */
   fun nudge(pin: Int) {
     if (!acceptsInput || pin !in 0 until geometry.pinCount) return
     nudgeScript.start(pin, lock.pins[pin].liftToShear)
     request(pin, 0f)
   }
 
-  fun setTension(on: Boolean) {
+  /** A hand on the wrench, pulling it to [amount] of full torque, 0..1. */
+  fun pullWrench(amount: Float) {
     if (!acceptsInput) return
-    lock.applyTension(on)
+    wrenchHeld = true
+    torqueTarget = amount.coerceIn(0f, 1f)
+  }
+
+  /** The hand comes off the wrench: the torque goes, and with it every set. */
+  fun releaseWrench() {
+    wrenchHeld = false
+    torqueTarget = 0f
   }
 
   /** Close the lock again. The shackle swings home and drops before the plug turns back. */
   fun reset() {
     nudgeScript.cancel()
-    requestedPin = -1
+    clearRequest()
     selectedPin = -1
-    if (lock.opened) choreography.beginRelock() else lock.relock()
+    releaseWrench()
+    if (lock.opened) {
+      choreography.beginRelock()
+    } else {
+      torque.snap(0f)
+      lock.relock()
+    }
   }
 
   /** 0 = assembled, 1 = fully exploded. */
@@ -115,23 +146,29 @@ class BenchSimulation(
   // ── Output ──────────────────────────────────────────────────────────────────────────────────
 
   fun snapshot(): BenchSnapshot = BenchSnapshot(
-    tension = lock.tension,
+    band = lock.band,
     opened = lock.opened,
     setCount = lock.setCount,
     bindingPin = lock.bindingPin,
     oversetPin = lock.oversetPin,
+    falseSetPin = lock.falseSetPin,
+    blockedPin = lock.blockedPin,
     selectedPin = selectedPin,
     setPulse = setPulse,
   )
 
   /** Advances everything by [dt] seconds. Returns true while anything is still moving. */
   fun advance(dt: Float): Boolean {
+    torque.target = if (acceptsInput) torqueTarget else 0f
+    var moving = torque.step(dt)
+    lock.applyTorque(torque.value)
+
     runNudge(dt)
-    pushRequestedPin()
+    pushRequestedPin(dt)
     stepPins(dt)
 
-    var moving = choreography.advance(dt, lock)
-    wrench.target = if (lock.tension || lock.opened) 1f else 0f
+    moving = choreography.advance(dt, lock) or moving
+    wrench.target = if ((wrenchHeld && acceptsInput) || lock.opened) 1f else 0f
     val selected = if (acceptsInput) selectedPin else -1
     moving = pick.advance(dt, selected, lock) or moving
     explode.target = explodeTarget
@@ -140,32 +177,52 @@ class BenchSimulation(
     moving = wrench.step(dt) or moving
     moving = explode.step(dt) or moving
     moving = bodyAlpha.step(dt) or moving
-    moving = moving || lock.isSettling || choreography.relocking || nudgeScript.isActive
+    moving = moving || catchingUp || lock.isSettling || choreography.relocking || nudgeScript.isActive
 
+    val plugBefore = pose.plugDegrees
+    val torqueBefore = pose.torque
     writePose()
+    if (pose.plugDegrees != plugBefore || pose.torque != torqueBefore) motionTick++
     return moving
   }
 
   private fun request(pin: Int, lift: Float) {
     if (!acceptsInput || pin !in 0 until geometry.pinCount) return
+    if (requestedPin != pin) setOrigin = Float.NaN
     requestedPin = pin
     requestedLift = lift
     selectedPin = pin
   }
 
+  private fun clearRequest() {
+    requestedPin = -1
+    setOrigin = Float.NaN
+    catchingUp = false
+  }
+
   private fun runNudge(dt: Float) {
     if (!nudgeScript.isActive) return
     val pin = nudgeScript.pin
-    val lift = nudgeScript.step(dt, pick.isUnder(pin))
-    if (lift != null) request(pin, lift) else requestedPin = -1
+    // Still short of the shear line: the pin is dragging, or stuck until the wrench is eased.
+    val short = lock.keyLift(pin) < lock.pins[pin].liftToShear - REACHED
+    val lift = nudgeScript.step(dt, pick.isUnder(pin), short)
+    if (lift != null) request(pin, lift) else clearRequest()
   }
 
-  /** A push only lands once the pick has actually arrived under the pin. */
-  private fun pushRequestedPin() {
+  /**
+   * A push only lands once the pick has actually arrived under the pin, and then only as fast
+   * as the pin will move: a binding pin drags behind the hand.
+   */
+  private fun pushRequestedPin(dt: Float) {
+    catchingUp = false
     val pin = requestedPin
     if (pin >= 0 && !lock.opened) {
       if (lock.heldPin >= 0 && lock.heldPin != pin) lock.release()
-      if (pick.isUnder(pin)) lock.press(pin, requestedLift)
+      if (!pick.isUnder(pin)) return
+      val origin = setOrigin
+      val wanted = if (origin.isNaN()) requestedLift else lock.pins[pin].liftToShear + (requestedLift - origin)
+      lock.press(pin, lock.reach(pin, wanted, dt), wanted)
+      catchingUp = !lock.opened && lock.keyLift(pin) < min(wanted, lock.liftLimit(pin)) - REACHED
     } else if (lock.heldPin >= 0) {
       lock.release()
     }
@@ -188,6 +245,8 @@ class BenchSimulation(
     pose.shackleLift = choreography.shackleLiftValue
     pose.shackleSwingDegrees = choreography.shackleSwingDegrees
     pose.wrenchSeat = wrench.value
+    pose.torque = lock.torque
+    pose.wrenchFlexDegrees = choreography.openSign * lock.torque * WRENCH_FLEX_DEGREES
     pose.pickZ = pick.pickZ
     pose.pickY = pick.pickY
     pose.explode = explode.value
@@ -196,12 +255,17 @@ class BenchSimulation(
 
   private fun handle(event: LockEvent) {
     when (event) {
-      is LockEvent.PinSet -> setPulse++
+      is LockEvent.PinSet -> {
+        setPulse++
+        if (event.pin == requestedPin) setOrigin = requestedLift
+      }
       LockEvent.Opened -> {
         setPulse++
         nudgeScript.cancel()
-        requestedPin = -1
+        clearRequest()
         selectedPin = -1
+        wrenchHeld = false
+        torqueTarget = 0f
       }
       else -> Unit
     }
@@ -210,5 +274,11 @@ class BenchSimulation(
 
   private companion object {
     const val GHOST_ALPHA = 0.14f
+
+    /** How far the wrench's handle springs round at full torque. */
+    const val WRENCH_FLEX_DEGREES = 4f
+
+    /** Closer than this to where it is going, a pin has arrived. */
+    const val REACHED = 1e-5f
   }
 }

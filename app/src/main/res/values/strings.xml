@@ -6,21 +6,35 @@
     <string name="status_open">OPEN</string>
     <string name="status_open_hint">Shackle released. Reset to relock.</string>
     <string name="status_overset">PIN %1$d OVERSET</string>
-    <string name="status_overset_hint">Key pin is past the shear line. Release tension to drop it.</string>
+    <string name="status_overset_hint">Key pin is past the shear line. Ease the wrench and it slips back.</string>
     <string name="status_locked">LOCKED</string>
-    <string name="status_locked_hint">Turn tension on, then lift pins to the shear line.</string>
+    <string name="status_locked_hint">Hold the wrench and pull down, then lift pins with another finger.</string>
+    <string name="status_seized">TOO MUCH TENSION</string>
+    <string name="status_seized_hint">The binding pin is seized. Ease the wrench until it moves.</string>
+    <string name="status_ease_off">EASE OFF</string>
+    <string name="status_ease_off_hint">Keep the pick on pin %1$d and ease the wrench. The plug has to turn back.</string>
+    <string name="status_false_set">FALSE SET</string>
+    <string name="status_false_set_hint">The plug is hanging on pin %1$d\'s spool. Lift it and ease the wrench.</string>
     <string name="status_picking">%1$d / %2$d SET</string>
     <string name="status_binding_hint">Pin %1$d is binding. Tap it, or drag it up.</string>
 
     <!-- Control bar -->
     <string name="control_explode">EXPLODE</string>
-    <string name="control_tension">TENSION</string>
+    <string name="control_hints">HINTS</string>
     <string name="control_ghost">GHOST</string>
     <string name="control_exploded">EXPLODED</string>
     <string name="control_reset">RESET</string>
     <string name="percent">%1$d%%</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
+
+    <!-- Tension wrench -->
+    <string name="wrench_title">WRENCH</string>
+    <string name="wrench_slack">SLACK</string>
+    <string name="wrench_eased">EASED</string>
+    <string name="wrench_firm">FIRM</string>
+    <string name="wrench_heavy">HEAVY</string>
+    <string name="cd_wrench">Tension wrench. Hold and pull down to put torque on the plug. Letting go drops every pin.</string>
 
     <!-- Camera presets -->
     <string name="camera_isometric">ISO</string>

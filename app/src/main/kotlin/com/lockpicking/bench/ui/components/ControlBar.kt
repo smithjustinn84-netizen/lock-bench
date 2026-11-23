@@ -21,18 +21,17 @@ import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 
-/** The bottom panel: explode slider, the lock toggles, and the camera presets. */
+/** The bottom panel: explode slider, the bench toggles, and the camera presets. */
 @Composable
 fun ControlBar(
   explode: Float,
   exploded: Boolean,
-  tension: Boolean,
-  tensionEnabled: Boolean,
+  hints: Boolean,
   ghost: Boolean,
   preset: CameraPreset,
   onExplodeChange: (Float) -> Unit,
   onExplodedToggle: () -> Unit,
-  onTensionToggle: () -> Unit,
+  onHintsToggle: () -> Unit,
   onGhostToggle: () -> Unit,
   onReset: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
@@ -42,7 +41,7 @@ fun ControlBar(
     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       ExplodeSlider(explode, onExplodeChange)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BenchToggle(stringResource(R.string.control_tension), tension, enabled = tensionEnabled, onClick = onTensionToggle)
+        BenchToggle(stringResource(R.string.control_hints), hints, onClick = onHintsToggle)
         BenchToggle(stringResource(R.string.control_ghost), ghost, onClick = onGhostToggle)
         BenchToggle(stringResource(R.string.control_exploded), exploded, onClick = onExplodedToggle)
         BenchButton(stringResource(R.string.control_reset), onClick = onReset)

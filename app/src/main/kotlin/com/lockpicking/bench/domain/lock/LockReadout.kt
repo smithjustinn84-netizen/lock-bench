@@ -16,4 +16,7 @@ interface LockReadout {
   fun driverLift(index: Int): Float
 
   fun state(index: Int): PinState
+
+  /** How far the driver at [index] is cocked over in a false set: 0 = upright, 1 = fully. */
+  fun driverTilt(index: Int): Float
 }

@@ -3,8 +3,9 @@ package com.lockpicking.bench.domain.bench
 import com.lockpicking.bench.domain.motion.CubicBezier
 
 /**
- * A tap on a pin, played out over frames: slide the pick under it, lift it exactly to the
- * shear line, hold a beat, and let go.
+ * A tap on a pin, played out over frames: slide the pick under it, lift it to the shear line,
+ * hold a beat, and let go. A pin that drags or sticks on the way gets longer: the pick keeps
+ * pushing for a while, which is the time to ease the wrench off a spool.
  */
 internal class NudgeScript {
   private enum class Phase { Approach, Lift, Hold }
@@ -33,9 +34,10 @@ internal class NudgeScript {
 
   /**
    * Advances by [dt] seconds and returns the lift to push the pin to this frame, or null once
-   * the script has finished and the pick should let go.
+   * the script has finished and the pick should let go. [short] says the pin has not reached
+   * the shear line yet.
    */
-  fun step(dt: Float, pickIsUnder: Boolean): Float? {
+  fun step(dt: Float, pickIsUnder: Boolean, short: Boolean = false): Float? {
     if (!isActive) return null
     return when (phase) {
       Phase.Approach -> {
@@ -56,7 +58,7 @@ internal class NudgeScript {
       }
       Phase.Hold -> {
         elapsed += dt
-        if (elapsed >= HOLD_SECONDS) {
+        if (elapsed >= HOLD_SECONDS && (!short || elapsed >= HOLD_MAX_SECONDS)) {
           cancel()
           null
         } else {
@@ -71,5 +73,8 @@ internal class NudgeScript {
     const val MAX_APPROACH_FRAMES = 40
     const val LIFT_SECONDS = 0.170f
     const val HOLD_SECONDS = 0.110f
+
+    /** How long the pick keeps pushing a pin that has not made it to the shear line. */
+    const val HOLD_MAX_SECONDS = 1.2f
   }
 }

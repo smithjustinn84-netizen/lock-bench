@@ -4,8 +4,8 @@ import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.PinState
+import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.motion.FrameClock
-import com.lockpicking.bench.testing.bindingOrder
 import com.lockpicking.bench.testing.testGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +62,17 @@ class LockBenchViewModelTest {
   /** Lets the frame loop play out [seconds] of virtual time. */
   private fun TestScope.play(seconds: Float = 2f) = advanceTimeBy((seconds * 1000).toLong())
 
+  /** Pulls the wrench lightly and taps whichever pin is binding until the lock opens. */
+  private fun TestScope.pickOpen(vm: LockBenchViewModel) {
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    repeat(2 * testGeometry.pinCount) {
+      if (vm.uiState.value.opened) return@repeat
+      vm.onPinTapped(vm.uiState.value.bindingPin)
+      play()
+    }
+  }
+
   @Test
   fun `loads the model info off the screen`() = runTest(dispatcher) {
     val vm = viewModel()
@@ -82,10 +93,11 @@ class LockBenchViewModelTest {
     val vm = viewModel()
     assertFalse(vm.acceptsPins)
     vm.onPinPressed(0)
-    vm.onTensionToggled()
+    vm.onWrenchPulled(0.5f)
     assertEquals(-1, vm.uiState.value.selectedPin)
     assertFalse(vm.uiState.value.tension)
     assertNull(vm.readout)
+    assertNull(vm.pose)
     assertNull(vm.telemetry())
   }
 
@@ -99,13 +111,13 @@ class LockBenchViewModelTest {
   @Test
   fun `controls update the ui state`() = runTest(dispatcher) {
     val vm = bound(viewModel())
-    vm.onTensionToggled()
+    vm.onHintsToggled()
     vm.onGhostToggled()
     vm.onExplodedToggled()
     vm.onPresetSelected(CameraPreset.ShearSide)
     vm.onPresetSelected(CameraPreset.ShearSide)
     val state = vm.uiState.value
-    assertTrue(state.tension)
+    assertFalse(state.hints)
     assertTrue(state.ghost)
     assertEquals(1f, state.explode, 0f)
     assertEquals(CameraPreset.ShearSide, state.preset)
@@ -123,20 +135,86 @@ class LockBenchViewModelTest {
   }
 
   @Test
-  fun `picking in binding order opens the lock and emits haptic events`() = runTest(dispatcher) {
+  fun `pulling the wrench publishes the band and the live torque`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onWrenchPulled(0.5f)
+    play(0.5f)
+    assertEquals(TorqueBand.Firm, vm.uiState.value.band)
+    assertTrue(vm.uiState.value.tension)
+    assertEquals(0.5f, vm.pose!!.torque, 0f)
+    assertEquals(0.5f, vm.telemetry()!!.torque, 0f)
+
+    vm.onWrenchReleased()
+    play(0.5f)
+    assertEquals(TorqueBand.Slack, vm.uiState.value.band)
+    assertEquals(0f, vm.pose!!.torque, 0f)
+  }
+
+  @Test
+  fun `the motion tick advances while the torque changes`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    play(0.5f)
+    val before = vm.motionTick.value
+    vm.onWrenchPulled(0.5f)
+    play(0.1f)
+    assertTrue(vm.motionTick.value > before)
+  }
+
+  @Test
+  fun `picking the binding pin each time opens the lock and emits its events`() = runTest(dispatcher) {
     val vm = bound(viewModel())
     val events = mutableListOf<LockEvent>()
-    backgroundScope.launch { vm.events.collect { events += it } }
-    vm.onTensionToggled()
-    for (pin in bindingOrder) {
-      vm.onPinTapped(pin)
-      play()
-    }
+    val scrapes = mutableListOf<LockEvent>()
+    backgroundScope.launch { vm.events.collect { events += it.event } }
+    backgroundScope.launch { vm.textures.collect { scrapes += it.event } }
+    pickOpen(vm)
     assertTrue(vm.uiState.value.opened)
     assertFalse(vm.acceptsPins)
     assertEquals(4, vm.uiState.value.setPulse)
     assertEquals(3, events.count { it is LockEvent.PinSet })
+    assertEquals(2, events.count { it is LockEvent.FalseSet })
     assertEquals(LockEvent.Opened, events.last())
+    assertTrue("the scrape of a pin is kept off the event stream", events.none { it is LockEvent.Grit })
+    assertTrue(scrapes.isNotEmpty() && scrapes.all { it is LockEvent.Grit })
+  }
+
+  @Test
+  fun `events carry the torque they happened under`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    val sets = mutableListOf<Float>()
+    backgroundScope.launch { vm.events.collect { if (it.event is LockEvent.PinSet) sets += it.torque } }
+    vm.onWrenchPulled(0.5f)
+    play(0.5f)
+    vm.onPinTapped(vm.uiState.value.bindingPin)
+    play()
+    assertEquals(listOf(0.5f), sets)
+  }
+
+  @Test
+  fun `a blocked spool and a false set reach the ui state`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onWrenchPulled(0.5f)
+    play(0.5f)
+    repeat(2) {
+      vm.onPinTapped(vm.uiState.value.bindingPin)
+      play()
+    }
+    // Pin 2 comes off its flange and the plug drops into the spools.
+    vm.onPinPressed(1)
+    play(0.5f)
+    vm.onPinDragged(1, 0.15f)
+    play(0.5f)
+    vm.onPinReleased()
+    play(0.5f)
+    assertEquals(2, vm.uiState.value.falseSetPin)
+    assertEquals(BenchStatus.FalseSet(pinNumber = 3), vm.uiState.value.status())
+
+    vm.onPinPressed(2)
+    play(0.5f)
+    vm.onPinDragged(2, 0.5f)
+    play(0.5f)
+    assertEquals(2, vm.uiState.value.blockedPin)
+    assertEquals(BenchStatus.EaseOff(pinNumber = 3), vm.uiState.value.status())
   }
 
   @Test
@@ -167,8 +245,10 @@ class LockBenchViewModelTest {
   fun `a rebind after rotation keeps the lock as it was`() = runTest(dispatcher) {
     val vm = viewModel()
     val firstScene = startScene(vm)
-    vm.onTensionToggled()
-    vm.onPinTapped(bindingOrder.first())
+    vm.onWrenchPulled(0.5f)
+    play(0.5f)
+    val first = vm.uiState.value.bindingPin
+    vm.onPinTapped(first)
     play()
     assertEquals(1, vm.uiState.value.setCount)
 
@@ -178,17 +258,14 @@ class LockBenchViewModelTest {
     play()
     assertEquals(1, vm.uiState.value.setCount)
     assertTrue(vm.uiState.value.tension)
-    assertEquals(PinState.Set, vm.readout!!.state(bindingOrder.first()))
+    assertEquals(PinState.Set, vm.readout!!.state(first))
   }
 
   @Test
   fun `reset relocks an open lock`() = runTest(dispatcher) {
     val vm = bound(viewModel())
-    vm.onTensionToggled()
-    for (pin in bindingOrder) {
-      vm.onPinTapped(pin)
-      play()
-    }
+    pickOpen(vm)
+    assertTrue(vm.uiState.value.opened)
     vm.onReset()
     play(5f)
     val state = vm.uiState.value
@@ -199,5 +276,8 @@ class LockBenchViewModelTest {
 
   private companion object {
     const val FRAME_MILLIS = 16L
+
+    /** Light enough that a spool turns the plug back without help. */
+    const val EASED = 0.15f
   }
 }

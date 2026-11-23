@@ -14,7 +14,7 @@ import com.lockpicking.bench.data.AssetPaths
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.bench.FrameMeter
-import com.lockpicking.bench.ui.bench.input.PinTouchHandler
+import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
 import io.github.sceneview.ExperimentalSceneViewApi
 import io.github.sceneview.SceneView
 import io.github.sceneview.environment.rememberHDREnvironment
@@ -40,7 +40,8 @@ private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
 
 /**
  * The 3D bench: the padlock model under a key light and the studio environment, an orbit
- * camera, and pin hit-testing.
+ * camera, and pin hit-testing. Every touch on the screen arrives here, the ones on the HUD's
+ * wrench lever included; [touch] decides which are the bench's and which move the camera.
  *
  * Everything Filament owns lives here and dies with the composition. Once the model binds,
  * [host] gets the lock's geometry and drives the rig through its frame loop.
@@ -54,7 +55,7 @@ fun BenchScene(
   presetResetKey: Int,
   contentPadding: PaddingValues,
   meter: FrameMeter,
-  touch: PinTouchHandler,
+  touch: BenchTouchHandler,
   modifier: Modifier = Modifier,
 ) {
   val engine = rememberEngine()
@@ -124,7 +125,7 @@ fun BenchScene(
     collisionSystem = collisionSystem,
     cameraManipulator = manipulator,
     onTouchEvent = { event, _ ->
-      touch.handle(event) { hit -> rig?.pinAt(collisionSystem.hitTest(hit)) ?: -1 }
+      touch.handle(event) { x, y -> rig?.pinAt(collisionSystem.hitTest(x, y)) ?: -1 }
     },
     onFrame = { meter.onFrame() },
   ) {

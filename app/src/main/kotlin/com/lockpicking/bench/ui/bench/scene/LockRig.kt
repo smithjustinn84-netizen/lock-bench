@@ -19,6 +19,7 @@ import io.github.sceneview.node.RenderableNode
 import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.sign
 
 /**
  * Binds the named nodes of `cutaway_padlock.glb` and poses them.
@@ -43,6 +44,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
     // Copied component-wise: Float3 is mutable, and this must not alias the node's own state.
     val rest: Position = node.position.let { Position(it.x, it.y, it.z) }
+    private val restRotation: Rotation = node.rotation.let { Rotation(it.x, it.y, it.z) }
+    private var roll = 0f
     private var dx = 0f
     private var dy = 0f
     private var dz = 0f
@@ -55,6 +58,13 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
       if (abs(x - dx) < EPS && abs(y - dy) < EPS && abs(z - dz) < EPS) return
       dx = x; dy = y; dz = z
       node.position = Position(rest.x + x, rest.y + y, rest.z + z)
+    }
+
+    /** Turns the part about its own Z by [degrees] from how it was authored. Writes only on change. */
+    fun roll(degrees: Float) {
+      if (abs(degrees - roll) < ROLL_EPS) return
+      roll = degrees
+      node.rotation = Rotation(restRotation.x, restRotation.y, restRotation.z + degrees)
     }
   }
 
@@ -104,6 +114,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     pickParkedZ = pick.rest.z,
     pickParkedY = pick.rest.y,
   )
+
+  /** Which way the plug turns to open. */
+  private val plugSign = sign(geometry.openDegrees)
 
   private val bodyMaterials: List<Pair<MaterialInstance, FloatArray>> =
     (body.node as? RenderableNode)?.materialInstances.orEmpty().map { instance ->
@@ -162,6 +175,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
       val driverLift = pins.driverLift(i)
       keyPins[i].offset(y = pins.keyLift(i) + 0.05f * e)
       driverPins[i].offset(y = driverLift + 0.15f * e)
+      // In a false set the plug carries the foot of a spool round with it and cocks it over.
+      driverPins[i].roll(-plugSign * pins.driverTilt(i) * SPOOL_TILT_DEGREES)
       springs[i].offset(y = 0.24f * e)
       // The spring hangs from the top of the bible, so scaling Y squeezes it against the roof.
       val rest = pins.pin(i).springRest
@@ -175,6 +190,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     val wrenchVisible = pose.wrenchSeat > 0.02f
     if (wrench.node.isVisible != wrenchVisible) wrench.node.isVisible = wrenchVisible
     wrench.offset(z = (1f - pose.wrenchSeat) * 0.10f + 0.14f * e)
+    // The wrench is the plug's child and turns with it; under torque its handle springs on ahead.
+    wrench.roll(pose.wrenchFlexDegrees)
 
     val pickOut = 0.20f * e
     pick.offset(y = pose.pickY - pick.rest.y, z = pose.pickZ - pick.rest.z + pickOut)
@@ -212,6 +229,10 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     private const val TAG = "LockRig"
     private const val PIN_COUNT = LockGeometry.PIN_COUNT
     private const val EPS = 1e-5f
+    private const val ROLL_EPS = 0.01f
+
+    /** How far a spool driver leans when the plug has turned fully into its waist. */
+    private const val SPOOL_TILT_DEGREES = 5f
 
     /** Extra rise beyond the toe's engagement so the swing visibly clears the housing. */
     private const val SHACKLE_CLEARANCE = 0.022f

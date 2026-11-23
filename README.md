@@ -15,24 +15,26 @@ Built with Jetpack Compose and [SceneView](https://github.com/SceneView/scenevie
 
 ## How to pick it
 
-1. Tap **TENSION** to load the plug.
-2. Drag up on a pin stack to lift it, or tap it to nudge it to the shear line.
-3. Only one pin binds at a time. Set the binding pin and the plug creeps round, moving the bind to the next one.
-4. Lift a binding pin too far and it oversets and jams. Release tension to drop every pin and start over.
-5. Set all four and the shackle releases. Tap **RESET** to relock.
+1. Hold the **WRENCH** lever with one thumb and pull down. How far you pull is how hard you tension; let go and every pin drops.
+2. With another finger, drag up on a pin stack to lift it, or tap it to nudge it to the shear line.
+3. The pin that stops the plug binds. Set it and the plug creeps round, moving the bind to the next one. A binding pin drags more the harder you pull, and seizes if you pull too hard.
+4. Pins 2 and 3 are spools. Once the standard pins are set the plug drops into a **false set**: it turns much further than a set is worth and hangs on a spool's waist. Keep the pick on that spool and ease the wrench until the plug turns back (counter-rotation) and the pin sets.
+5. Lift a pin too far past its set and it oversets and jams. Ease the wrench and it slips back without losing the others.
+6. Set all four and the shackle releases. Tap **RESET** to relock.
 
-The **SHEAR LINE** panel shows each stack against the shear line, and you get haptic feedback as pins set.
+The **WRENCH** panel shows the torque against the marks where a spool can pass, where it is stuck and where pins seize, and a needle for how far the plug has turned. The **SHEAR LINE** panel shows each stack against the shear line. Sets, false sets and counter-rotation are also felt as vibration and heard.
 
 ## Views
 
 | Control | What it does |
 | --- | --- |
 | **ISO / KEYWAY / SHEAR** | Camera presets. Tap the current one again to snap an orbited camera back. |
+| **HINTS** | Names the binding pin and says what the lock is doing. Off leaves you with feel, the gauge and the motion. |
 | **GHOST** | Makes the housing translucent. |
 | **EXPLODED** / **EXPLODE** slider | Pulls the parts apart. |
 | **RESET** | Relocks the padlock. |
 
-Drag anywhere off the pins to orbit the camera, and pinch to zoom.
+Drag anywhere off the pins and the lever to orbit the camera, and pinch to zoom. The camera holds still while the wrench is held.
 
 ## Project layout
 
@@ -45,9 +47,9 @@ app/src/main/kotlin/com/lockpicking/bench/
   data/                   LockAssetRepository and the .glb summary parser
   di/AppModule.kt         Koin module
   ui/
-    bench/                LockBenchViewModel, the screen, touch input, haptics
+    bench/                LockBenchViewModel, the screen, touch routing, haptics and sound
     bench/scene/          SceneView scene and LockRig, which poses the glTF nodes
-    components/           shear line panel, control bar, status block, stats pill
+    components/           shear line panel, wrench lever, control bar, status block, stats pill
     theme/                colours, type and BenchTheme
 app/src/main/assets/
   models/cutaway_padlock.glb
