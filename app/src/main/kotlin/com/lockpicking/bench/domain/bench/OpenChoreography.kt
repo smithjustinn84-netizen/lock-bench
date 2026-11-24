@@ -42,21 +42,7 @@ internal class OpenChoreography(private val geometry: LockGeometry) {
   /** Sets this frame's targets from [lock], steps the springs, and returns true while moving. */
   fun advance(dt: Float, lock: LockMechanics): Boolean {
     val open = lock.opened && !relocking
-    shackleSwing.target = if (open && shackleLift.value > geometry.shackleTravel * SWING_AT) SWING_DEGREES else 0f
-    shackleLift.target = when {
-      open && abs(plug.value) > LIFT_AT_PLUG_DEGREES -> geometry.shackleTravel
-      !open && abs(shackleSwing.value) > SWING_HOME_DEGREES -> geometry.shackleTravel
-      else -> 0f
-    }
-    plug.target = when {
-      open -> geometry.openDegrees
-      relocking -> if (shackleLift.value > SHACKLE_SEATED) geometry.openDegrees else 0f
-      else -> 0f
-    }
-    if (relocking && plug.target == 0f && abs(plug.value) < PLUG_HOME_DEGREES) {
-      relocking = false
-      lock.relock()
-    }
+    aim(open, lock)
 
     val nowPicking = !open && !relocking
     if (nowPicking && !picking) creep.snap(plug.value)
@@ -72,6 +58,25 @@ internal class OpenChoreography(private val geometry: LockGeometry) {
     moving = shackleLift.step(dt) or moving
     moving = shackleSwing.step(dt) or moving
     return moving
+  }
+
+  /** Points the plug and shackle at where [open] and a relock want them, and finishes a relock. */
+  private fun aim(open: Boolean, lock: LockMechanics) {
+    shackleSwing.target = if (open && shackleLift.value > geometry.shackleTravel * SWING_AT) SWING_DEGREES else 0f
+    shackleLift.target = when {
+      open && abs(plug.value) > LIFT_AT_PLUG_DEGREES -> geometry.shackleTravel
+      !open && abs(shackleSwing.value) > SWING_HOME_DEGREES -> geometry.shackleTravel
+      else -> 0f
+    }
+    plug.target = when {
+      open -> geometry.openDegrees
+      relocking -> if (shackleLift.value > SHACKLE_SEATED) geometry.openDegrees else 0f
+      else -> 0f
+    }
+    if (relocking && plug.target == 0f && abs(plug.value) < PLUG_HOME_DEGREES) {
+      relocking = false
+      lock.relock()
+    }
   }
 
   private companion object {

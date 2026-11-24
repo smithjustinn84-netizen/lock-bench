@@ -144,26 +144,35 @@ class BenchTouchRouter(
     }
     if (owner != Owner.Bench) return false
     if (id == wrenchPointer) {
-      val amount = WrenchThrow.torqueAt((y - wrenchDownY) / wrenchThrowPx)
-      if (amount != wrenchAmount) {
-        wrenchAmount = amount
-        wrench.onWrenchPulled(amount)
-      }
+      pullWrench(y)
     } else if (id == pickPointer) {
-      if (!dragging && (abs(x - pickDownX) > touchSlop || abs(y - pickDownY) > touchSlop)) dragging = true
-      if (!dragging) return true
-      var depth = depthAtDown + (x - pickDownX) / depthRangePx
-      // A thumb that runs on past the end of the keyway does not have to come all the way back.
-      val over = if (depth > 1f + OVERRUN) depth - (1f + OVERRUN) else if (depth < -OVERRUN) depth + OVERRUN else 0f
-      if (over != 0f) {
-        pickDownX += over * depthRangePx
-        depth -= over
-      }
-      if (y > pickFloorY) pickFloorY = y
-      val lift = ((pickFloorY - y - touchSlop) / dragRangePx).coerceIn(0f, MAX_LIFT)
-      pick.onPickMoved(depth, lift)
+      dragPick(x, y)
     }
     return true
+  }
+
+  private fun pullWrench(y: Float) {
+    val amount = WrenchThrow.torqueAt((y - wrenchDownY) / wrenchThrowPx)
+    if (amount != wrenchAmount) {
+      wrenchAmount = amount
+      wrench.onWrenchPulled(amount)
+    }
+  }
+
+  /** The pick thumb moved: once it is past the slop it is a drag, along and up the keyway. */
+  private fun dragPick(x: Float, y: Float) {
+    if (!dragging && (abs(x - pickDownX) > touchSlop || abs(y - pickDownY) > touchSlop)) dragging = true
+    if (!dragging) return
+    var depth = depthAtDown + (x - pickDownX) / depthRangePx
+    // A thumb that runs on past the end of the keyway does not have to come all the way back.
+    val over = if (depth > 1f + OVERRUN) depth - (1f + OVERRUN) else if (depth < -OVERRUN) depth + OVERRUN else 0f
+    if (over != 0f) {
+      pickDownX += over * depthRangePx
+      depth -= over
+    }
+    if (y > pickFloorY) pickFloorY = y
+    val lift = ((pickFloorY - y - touchSlop) / dragRangePx).coerceIn(0f, MAX_LIFT)
+    pick.onPickMoved(depth, lift)
   }
 
   /** A finger came up. Returns true if the gesture belonged to the bench. */
