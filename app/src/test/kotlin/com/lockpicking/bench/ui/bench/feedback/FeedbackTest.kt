@@ -88,6 +88,7 @@ class FeedbackTest {
   fun `what the tip drags over is a texture`() {
     val textures = listOf(LockEvent.Grit(0), LockEvent.SpringTick(0, 0.5f), LockEvent.WardScrape)
     assertTrue(textures.all { cueFor(it, 0.4f).haptic!!.isTexture })
-    assertTrue(listOf(LockEvent.PinSet(0, 1), LockEvent.WardHit, LockEvent.PinTouched(0, PinFeel.Binding)).none { cueFor(it, 0.4f).haptic!!.isTexture })
+    val counted = listOf(LockEvent.PinSet(0, 1), LockEvent.WardHit, LockEvent.PinTouched(0, PinFeel.Binding))
+    assertTrue(counted.none { cueFor(it, 0.4f).haptic!!.isTexture })
   }
 }

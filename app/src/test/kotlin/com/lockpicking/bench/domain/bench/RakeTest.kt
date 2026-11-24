@@ -183,7 +183,8 @@ class RakeTest {
       sim.pull(EASED)
       sim.scrub(seconds = 5f, high = 0.070f)
       assertFalse("order $order", sim.snapshot().opened)
-      assertTrue("order $order", american1100Geometry.pinSpecs.indices.none { sim.readout.state(it) == PinState.Set && american1100Geometry.pinSpecs[it].serrated })
+      val pins = american1100Geometry.pinSpecs
+      assertTrue("order $order", pins.indices.none { sim.readout.state(it) == PinState.Set && pins[it].serrated })
     }
     assertTrue(events.any { it is LockEvent.SerrationClick })
   }

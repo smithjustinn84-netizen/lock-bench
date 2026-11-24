@@ -24,7 +24,6 @@ import com.lockpicking.bench.ui.bench.feedback.LockFeedback
 import com.lockpicking.bench.ui.bench.input.PickInput
 import com.lockpicking.bench.ui.bench.input.WrenchInput
 import com.lockpicking.bench.ui.bench.scene.BenchSceneHost
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -38,6 +37,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONException
+import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -129,9 +130,12 @@ class LockBenchViewModel(
         val info = assets.loadModelInfo(lock)
         // A slow read must not land on a bench that has moved on to another lock.
         _uiState.update { if (it.lock == lock) it.copy(modelInfo = info) else it }
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Exception) {
+      } catch (e: IOException) {
+        onModelFailed(e.message ?: e.toString())
+      } catch (e: IllegalArgumentException) {
+        // GlbParser's checks on the header.
+        onModelFailed(e.message ?: e.toString())
+      } catch (e: JSONException) {
         onModelFailed(e.message ?: e.toString())
       }
     }

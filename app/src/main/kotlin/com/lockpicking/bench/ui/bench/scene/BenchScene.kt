@@ -49,8 +49,9 @@ private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
 
 /**
  * The 3D bench: [lock]'s model under a key light and the studio environment, an orbit
- * camera. Choosing another lock swaps the model: the old rig goes and a new one binds. Every touch on the screen arrives here, the ones on the HUD's tension zone and pick
- * pad included; [touch] decides which are the bench's and which move the camera.
+ * camera. Choosing another lock swaps the model: the old rig goes and a new one binds.
+ * Every touch on the screen arrives here, the ones on the HUD's tension zone and pick pad
+ * included; [touch] decides which are the bench's and which move the camera.
  *
  * Everything Filament owns lives here and dies with the composition. Once the model binds,
  * [host] gets the lock's geometry and drives the rig through its frame loop.

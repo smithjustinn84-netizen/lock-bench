@@ -115,8 +115,10 @@ fun BenchUiState.status(): BenchStatus = when {
 
   band == TorqueBand.Heavy -> BenchStatus.Seized
 
-  blockedPin >= 0 ->
-    if (geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)
+  blockedPin >= 0 -> {
+    val serrated = geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true
+    if (serrated) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)
+  }
 
   falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1)
 

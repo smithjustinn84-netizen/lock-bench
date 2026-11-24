@@ -13,6 +13,12 @@ complexity:
     ignoreAnnotated: ['Composable']
   CyclomaticComplexMethod:
     ignoreAnnotated: ['Composable']
+    # A flat `when` over every event or sound is a lookup table, not branching logic.
+    ignoreSimpleWhenEntries: true
+  TooManyFunctions:
+    # Count a class's own public surface: private helpers and interface overrides are free.
+    ignorePrivate: true
+    ignoreOverridden: true
 
 style:
   MaxLineLength:

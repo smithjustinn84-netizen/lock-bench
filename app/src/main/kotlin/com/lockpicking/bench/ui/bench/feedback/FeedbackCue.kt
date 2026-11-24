@@ -47,7 +47,22 @@ enum class Haptic {
 val Haptic.isTexture: Boolean get() = this == Haptic.Grain || this == Haptic.Scrape || this == Haptic.Spring
 
 /** The sounds the lock makes. [LockSoundEngine] has the recording for each. */
-enum class LockSound { SetClick, FalseSetClunk, CounterTick, Blocked, Grit, Rattle, Jam, SlipBack, Open, Relock, Touch, Knock, Scrape, Creak }
+enum class LockSound {
+  SetClick,
+  FalseSetClunk,
+  CounterTick,
+  Blocked,
+  Grit,
+  Rattle,
+  Jam,
+  SlipBack,
+  Open,
+  Relock,
+  Touch,
+  Knock,
+  Scrape,
+  Creak,
+}
 
 /** What one lock event feels and sounds like. [strength] is 0..1 and scales both. */
 data class FeedbackCue(val haptic: Haptic?, val sound: LockSound?, val strength: Float)

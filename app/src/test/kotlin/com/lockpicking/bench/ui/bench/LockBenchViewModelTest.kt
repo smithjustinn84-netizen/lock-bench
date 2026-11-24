@@ -41,6 +41,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LockBenchViewModelTest {
@@ -197,7 +198,7 @@ class LockBenchViewModelTest {
 
   @Test
   fun `a failed load surfaces its message`() = runTest(dispatcher) {
-    val vm = viewModel { error("disk on fire") }
+    val vm = viewModel { throw IOException("disk on fire") }
     advanceUntilIdle()
     assertEquals("disk on fire", vm.uiState.value.loadError)
   }
@@ -677,7 +678,9 @@ class LockBenchViewModelTest {
       val t = frame * FRAME_MILLIS / 1000f
       val stroke = (t * 2f) % 1f
       val wander = (t * 0.7f) % 1f
-      vm.onPickMoved(if (stroke < 0.5f) stroke * 2f else 2f - stroke * 2f, 0.4f + 0.4f * (if (wander < 0.5f) wander * 2f else 2f - wander * 2f))
+      val across = if (stroke < 0.5f) stroke * 2f else 2f - stroke * 2f
+      val height = 0.4f + 0.4f * (if (wander < 0.5f) wander * 2f else 2f - wander * 2f)
+      vm.onPickMoved(across, height)
       advanceTimeBy(FRAME_MILLIS)
       if (vm.uiState.value.opened) return
     }

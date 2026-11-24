@@ -386,7 +386,11 @@ class LockMechanicsTest {
       lock.press(1, lift)
     }
     lock.release()
-    assertEquals("one for each spool: with one left the plug drops straight back into its waist", 2, events.count { it is LockEvent.FalseSet })
+    assertEquals(
+      "one for each spool: with one left the plug drops straight back into its waist",
+      2,
+      events.count { it is LockEvent.FalseSet },
+    )
     assertEquals(2, lock.falseSetPin)
     lift = 0f
     while (!lock.opened) {
