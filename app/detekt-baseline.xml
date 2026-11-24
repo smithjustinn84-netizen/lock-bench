@@ -1,37 +1,5 @@
-<?xml version="1.0" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <SmellBaseline>
   <ManuallySuppressedIssues/>
-  <CurrentIssues>
-    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$(rake &amp;&amp; torque &lt;= T_EASED) || (held[pin] &amp;&amp; setThisPush[pin])</ID>
-    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$rake &amp;&amp; security &amp;&amp; wasBinding &amp;&amp; before &gt;= shear</ID>
-    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$rattling[i] &amp;&amp; !held[i] &amp;&amp; keyLifts[i] &lt;= 0f &amp;&amp; driverLifts[i] &lt;= driverFloor(i) + fall</ID>
-    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$target &gt;= shear &amp;&amp; bindingPin == pin &amp;&amp; (alone || !security || wasBinding)</ID>
-    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$fun advance(dt: Float): Boolean</ID>
-    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$private fun pushRequestedPin(dt: Float)</ID>
-    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$private fun rakeStep(z: Float, want: Float, dt: Float, authority: Float)</ID>
-    <ID>CyclomaticComplexMethod:BenchTouchRouter.kt$BenchTouchRouter$fun onMove(id: Int, x: Float, y: Float): Boolean</ID>
-    <ID>CyclomaticComplexMethod:FeedbackCue.kt$fun cueFor(event: LockEvent, torque: Float): FeedbackCue</ID>
-    <ID>CyclomaticComplexMethod:LockHaptics.kt$LockHaptics$private fun pulsed(haptic: Haptic, level: Float): VibrationEffect</ID>
-    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun liftLimit(pin: Int, rake: Boolean = false): Float</ID>
-    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
-    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun step(dt: Float)</ID>
-    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$private fun refreshPlug(pusher: Int = -1)</ID>
-    <ID>CyclomaticComplexMethod:LockSoundEngine.kt$LockSoundEngine$fun play(sound: LockSound, strength: Float)</ID>
-    <ID>CyclomaticComplexMethod:OpenChoreography.kt$OpenChoreography$fun advance(dt: Float, lock: LockMechanics): Boolean</ID>
-    <ID>LongMethod:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
-    <ID>LoopWithTooManyJumpStatements:BenchSimulation.kt$BenchSimulation$for</ID>
-    <ID>MaxLineLength:BenchScene.kt$*</ID>
-    <ID>MaxLineLength:BenchUiState.kt$if (geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)</ID>
-    <ID>MaxLineLength:FeedbackCue.kt$LockSound$enum</ID>
-    <ID>MaxLineLength:FeedbackTest.kt$FeedbackTest$assertTrue(listOf(LockEvent.PinSet(0, 1), LockEvent.WardHit, LockEvent.PinTouched(0, PinFeel.Binding)).none { cueFor(it, 0.4f).haptic!!.isTexture })</ID>
-    <ID>MaxLineLength:LockBenchViewModelTest.kt$LockBenchViewModelTest$vm.onPickMoved(if (stroke &lt; 0.5f) stroke * 2f else 2f - stroke * 2f, 0.4f + 0.4f * (if (wander &lt; 0.5f) wander * 2f else 2f - wander * 2f))</ID>
-    <ID>MaxLineLength:LockMechanicsTest.kt$LockMechanicsTest$assertEquals("one for each spool: with one left the plug drops straight back into its waist", 2, events.count { it is LockEvent.FalseSet })</ID>
-    <ID>MaxLineLength:RakeTest.kt$RakeTest$assertTrue("order $order", american1100Geometry.pinSpecs.indices.none { sim.readout.state(it) == PinState.Set &amp;&amp; american1100Geometry.pinSpecs[it].serrated })</ID>
-    <ID>ReturnCount:LockMechanics.kt$LockMechanics$fun liftLimit(pin: Int, rake: Boolean = false): Float</ID>
-    <ID>ReturnCount:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
-    <ID>TooGenericExceptionCaught:LockBenchViewModel.kt$LockBenchViewModel$e: Exception</ID>
-    <ID>TooManyFunctions:BenchSimulation.kt$BenchSimulation</ID>
-    <ID>TooManyFunctions:LockBenchViewModel.kt$LockBenchViewModel : ViewModelPickInputWrenchInputBenchSceneHost</ID>
-    <ID>TooManyFunctions:LockMechanics.kt$LockMechanics : LockReadout</ID>
-  </CurrentIssues>
+  <CurrentIssues/>
 </SmellBaseline>

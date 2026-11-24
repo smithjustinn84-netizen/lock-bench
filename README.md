@@ -180,7 +180,7 @@ Fix formatting in place:
 ./gradlew spotlessApply
 ```
 
-ktlint rules live in the root `build.gradle.kts` (mirrored in `.editorconfig` for the IDE) and detekt's in `config/detekt/detekt.yml`. Findings that predate the tools are recorded in `app/detekt-baseline.xml` and `app/lint-baseline.xml`; new code must pass clean.
+ktlint rules live in the root `build.gradle.kts` (mirrored in `.editorconfig` for the IDE) and detekt's in `config/detekt/detekt.yml`. detekt runs clean, with an empty `app/detekt-baseline.xml`. Lint warnings that predate the tools are recorded in `app/lint-baseline.xml`. New code must pass clean.
 
 ### Regenerating the assets
 

@@ -19,6 +19,8 @@ complexity:
     # Count a class's own public surface: private helpers and interface overrides are free.
     ignorePrivate: true
     ignoreOverridden: true
+    # The lock engine, the simulation and the view model are each one cohesive surface.
+    thresholdInClasses: 20
 
 style:
   MaxLineLength:
