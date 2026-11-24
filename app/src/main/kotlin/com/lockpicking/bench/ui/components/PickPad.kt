@@ -1,7 +1,17 @@
 package com.lockpicking.bench.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,9 +35,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -35,6 +47,9 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
@@ -46,6 +61,8 @@ import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinSpec
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.model.LockGeometry
+import com.lockpicking.bench.ui.bench.juice.BenchJuice
+import com.lockpicking.bench.ui.bench.juice.rememberSparks
 import com.lockpicking.bench.ui.bench.reportBounds
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
@@ -89,6 +106,8 @@ fun PickPad(
   /** Swaps the pick, or null if this lock has only a hook: then there is no switch. */
   onTool: ((PickTool) -> Unit)? = null,
   onToolSwitchPlaced: (Rect) -> Unit = {},
+  /** Where set bursts come from, or null for a pad that never celebrates. */
+  juice: BenchJuice? = null,
 ) {
   val pulse = remember { Animatable(0f) }
   // Flash only on a pulse that arrives while shown: the count survives rotation, and a rebuilt
@@ -101,6 +120,35 @@ fun PickPad(
       pulse.animateTo(0f, tween(PULSE_MILLIS))
     }
   }
+  val sparks = rememberSparks()
+  val pop = remember { Animatable(1f) }
+  val anchors = remember { PadAnchors() }
+  val burstKey = juice?.padBurst?.intValue ?: 0
+  var seenBurst by remember { mutableIntStateOf(burstKey) }
+  LaunchedEffect(burstKey) {
+    val pin = juice?.burstPin ?: -1
+    val all = pin == BenchJuice.BURST_ALL
+    if (burstKey == seenBurst || (!all && pin !in anchors.columns.indices)) return@LaunchedEffect
+    seenBurst = burstKey
+    anchors.popPin = pin
+    anchors.columns.forEachIndexed { i, x ->
+      if (all || i == pin) {
+        sparks.burst(
+          x,
+          anchors.shearY,
+          SET_SPARK_COUNT,
+          SetSparkColors,
+          speed = anchors.sparkSpeed,
+          sizePx = anchors.sparkSize,
+          lifeSeconds = SET_SPARK_LIFE,
+        )
+      }
+    }
+    pop.snapTo(0f)
+    pop.animateTo(1f, tween(POP_MILLIS, easing = FastOutSlowInEasing))
+  }
+  val measurer = rememberTextMeasurer()
+  val setLabel = stringResource(R.string.juice_set)
   val count = pins.pinCount
   val keyway = remember(geometry) { Keyway(geometry) }
   val description = stringResource(R.string.cd_pick_pad)
@@ -120,11 +168,23 @@ fun PickPad(
           Text(stringResource(R.string.pick_title), style = BenchType.Label, color = BenchColors.Dim)
         }
         if (showSetCount) {
-          Text(
-            stringResource(R.string.shear_line_count, setCount, count),
-            style = BenchType.Label,
-            color = if (opened) BenchColors.Set else BenchColors.Brass,
-          )
+          AnimatedContent(
+            targetState = setCount,
+            transitionSpec = {
+              val up = targetState > initialState
+              (
+                slideInVertically { if (up) it else -it } + fadeIn() +
+                  scaleIn(initialScale = 1.6f, animationSpec = spring(Spring.DampingRatioMediumBouncy))
+                ) togetherWith (slideOutVertically { if (up) -it else it } + fadeOut())
+            },
+            label = "setCount",
+          ) { sets ->
+            Text(
+              stringResource(R.string.shear_line_count, sets, count),
+              style = BenchType.Headline.copy(fontSize = BenchType.Label.fontSize * COUNT_SCALE),
+              color = if (opened) BenchColors.Set else BenchColors.Brass,
+            )
+          }
         }
       }
       // This repaints on every frame a pin moves. Everything it draws with is made here, once
@@ -133,6 +193,15 @@ fun PickPad(
         Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp).drawWithCache {
           val ink = PadInk(this, geometry, keyway, size.height - 14.dp.toPx(), count)
           val scale = ink.scale
+          val label = measurer.measure(
+            setLabel,
+            BenchType.Headline.copy(
+              fontSize = BenchType.Label.fontSize * SET_LABEL_SCALE,
+              color = BenchColors.Set,
+              shadow = Shadow(Color.Black, offset = Offset(0f, 2f), blurRadius = 6f),
+            ),
+          )
+          anchors.measure(size.width, scale.y(geometry.shearY), count, keyway, this)
           onDrawBehind {
             // Read here, not above, so pin and pick motion repaints without rebuilding the cache.
             motionTick.intValue
@@ -142,7 +211,10 @@ fun PickPad(
             } else {
               for (i in 0 until count) drawPinStack(i, pins, ink, isBinding = i == bindingPin, isSelected = i == selectedPin)
               drawShearLine(scale.y(geometry.shearY), opened, pulse.value, ink)
+              drawSetPop(anchors, pop.value, label, ink)
             }
+            sparks.frame.intValue
+            sparks.draw(this)
             val z = pickZ()
             val rake = geometry.rake
             if (!keyway.contains(z)) return@onDrawBehind
@@ -178,6 +250,9 @@ private class PadInk(density: Density, val geometry: LockGeometry, val keyway: K
   val rakeStroke: Stroke
   val ringStroke: Stroke
   val shearDash: PathEffect
+
+  /** The bore: lit at the top of the bible, darker down into the plug. */
+  val chamberFill = Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x0AFFFFFF)))
 
   init {
     with(density) {
@@ -340,9 +415,18 @@ private fun DrawScope.drawPinStack(i: Int, pins: LockReadout, ink: PadInk, isBin
   // In a false set the turned plug has carried the foot of the driver sideways.
   val cocked = pins.driverTilt(i) * pinWidth * SPOOL_COCK
 
+  // A halo behind the binding stack.
+  if (isBinding && state == PinState.Resting) {
+    drawRoundRect(
+      color = BenchColors.Brass.copy(alpha = BINDING_GLOW_ALPHA),
+      topLeft = Offset(left - 6.dp.toPx(), scale.y(geometry.chamberTop)),
+      size = Size(pinWidth + 12.dp.toPx(), scale.y(geometry.pinRestY) - scale.y(geometry.chamberTop)),
+      cornerRadius = CornerRadius(6.dp.toPx()),
+    )
+  }
   // Chamber: the plug's bore below the shear line, the bible above it.
   drawRoundRect(
-    color = BenchColors.Chamber,
+    brush = ink.chamberFill,
     topLeft = Offset(left - 2.dp.toPx(), scale.y(geometry.chamberTop)),
     size = Size(pinWidth + 4.dp.toPx(), scale.y(geometry.pinRestY) - scale.y(geometry.chamberTop)),
     cornerRadius = CornerRadius(2.dp.toPx()),
@@ -363,6 +447,7 @@ private fun DrawScope.drawPinStack(i: Int, pins: LockReadout, ink: PadInk, isBin
   }
   val driverHeight = scale.y(driverBase) - scale.y(driverTop)
   drawRoundRect(driverColor, Offset(left + cocked, scale.y(driverTop)), Size(pinWidth, driverHeight - 1f), CornerRadius(1.5.dp.toPx()))
+  drawSheen(left + cocked, scale.y(driverTop), driverHeight - 1f, pinWidth)
   drawDriverCuts(spec, left + cocked, scale.y(driverBase), scale.y(driverTop), ink)
 
   val keyColor = if (state == PinState.Overset) BenchColors.Fault else BenchColors.Brass
@@ -379,14 +464,22 @@ private fun DrawScope.drawPinStack(i: Int, pins: LockReadout, ink: PadInk, isBin
     close()
   }
   drawPath(keyPath, keyColor)
+  drawSheen(left, scale.y(keyTop) + 1f, scale.y(keyBase) - scale.y(keyTop) - KEY_SHEEN_TRIM * scale.unit, pinWidth)
 
-  // Markers under each column: who is binding and who is selected.
+  drawMarker(cx, state, isBinding, isSelected, ink)
+}
+
+/** The dot under a column: who is binding, who is set, and a ring round the one selected. */
+private fun DrawScope.drawMarker(cx: Float, state: PinState, isBinding: Boolean, isSelected: Boolean, ink: PadInk) {
   val markerY = size.height - 7.dp.toPx()
   val markerColor = when {
     state == PinState.Set -> BenchColors.Set
     state == PinState.Overset -> BenchColors.Fault
     isBinding -> BenchColors.Brass
     else -> BenchColors.Hairline
+  }
+  if (state == PinState.Set || isBinding) {
+    drawCircle(markerColor.copy(alpha = MARKER_HALO_ALPHA), radius = 8.dp.toPx(), center = Offset(cx, markerY))
   }
   drawCircle(markerColor, radius = if (isBinding) 4.dp.toPx() else 3.dp.toPx(), center = Offset(cx, markerY))
   if (isSelected) {
@@ -459,3 +552,95 @@ private fun DrawScope.drawSpring(i: Int, ink: PadInk, cx: Float, top: Float, bot
 }
 
 private fun lerpColor(a: Color, b: Color, t: Float): Color = lerp(a, b, t.coerceIn(0f, 1f))
+
+private const val PULSE_POP_RISE_DP = 30f
+private const val SET_LABEL_SCALE = 1.5f
+
+/** The word starts this far above the shear line, clear of the ring. */
+private const val SET_LABEL_LIFT_DP = 16f
+private const val POP_MILLIS = 700
+private const val SET_SPARK_COUNT = 22
+private const val SET_SPARK_LIFE = 0.55f
+private const val COUNT_SCALE = 1.45f
+private const val BINDING_GLOW_ALPHA = 0.16f
+private const val MARKER_HALO_ALPHA = 0.25f
+private const val SHEEN_ALPHA = 0.32f
+private const val SHEEN_LEFT = 0.18f
+private const val SHEEN_WIDTH = 0.16f
+
+/** The key pin's sheen stops short of its tapered tip. */
+private const val KEY_SHEEN_TRIM = 0.014f
+
+private val SetSparkColors = listOf(BenchColors.Set, Color(0xFFB8F5D0), Color.White, BenchColors.BrassLight)
+
+/**
+ * Where the pad's columns and shear line were last drawn, in canvas pixels, so a burst fired
+ * from outside the draw phase lands on the right column. Plain fields, written in the cache
+ * block whenever the size changes.
+ */
+private class PadAnchors {
+  var columns = FloatArray(0)
+  var shearY = 0f
+  var sparkSpeed = 0f
+  var sparkSize = 0f
+
+  /** The column the last "SET" rose from. */
+  var popPin = -1
+
+  fun measure(width: Float, shear: Float, count: Int, keyway: Keyway, density: Density) {
+    columns = FloatArray(count) { width * keyway.depthOf(it) }
+    shearY = shear
+    with(density) {
+      sparkSpeed = 260.dp.toPx()
+      sparkSize = 2.dp.toPx()
+    }
+  }
+}
+
+/** A light stripe down the left of a pin, so it reads as a turned cylinder and not a flat bar. */
+private fun DrawScope.drawSheen(left: Float, top: Float, height: Float, pinWidth: Float) {
+  if (height <= 0f) return
+  drawRect(
+    Color.White.copy(alpha = SHEEN_ALPHA),
+    Offset(left + pinWidth * SHEEN_LEFT, top + 1f),
+    Size(pinWidth * SHEEN_WIDTH, height - 2f),
+  )
+}
+
+/** The ring and the word that rise off a column as its pin sets. [t] runs 0..1 and is done at 1. */
+private fun DrawScope.drawSetPop(anchors: PadAnchors, t: Float, label: TextLayoutResult, ink: PadInk) {
+  if (t >= 1f) return
+  if (anchors.popPin == BenchJuice.BURST_ALL) {
+    // The lock opened: only the rings, all at once. The banner says the rest.
+    for (cx in anchors.columns) drawSetRing(cx, anchors.shearY, t, ink)
+    return
+  }
+  val pin = anchors.popPin
+  if (pin !in anchors.columns.indices) return
+  val cx = anchors.columns[pin]
+  val y = anchors.shearY
+  val fade = 1f - t
+  drawSetRing(cx, y, t, ink)
+  val rise = PULSE_POP_RISE_DP.dp.toPx() * t
+  drawText(
+    label,
+    topLeft = Offset(cx - label.size.width / 2f, y - label.size.height - SET_LABEL_LIFT_DP.dp.toPx() - rise),
+    alpha = fade,
+  )
+}
+
+private const val RING_FROM = 0.6f
+private const val RING_GROWTH = 1.6f
+private const val RING_STROKE_DP = 3f
+private const val RING_STROKE_MIN_DP = 0.5f
+
+/** A ring that swells off the shear line at a column and thins as it goes. */
+private fun DrawScope.drawSetRing(cx: Float, y: Float, t: Float, ink: PadInk) {
+  val fade = 1f - t
+  drawCircle(
+    BenchColors.Set.copy(alpha = fade),
+    radius = ink.pinWidth * (RING_FROM + RING_GROWTH * t),
+    center = Offset(cx, y),
+    style = Stroke((RING_STROKE_DP * fade + RING_STROKE_MIN_DP).dp.toPx()),
+  )
+}

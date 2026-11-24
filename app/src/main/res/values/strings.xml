@@ -55,8 +55,7 @@
     </plurals>
     <string name="game_best">best %1$s</string>
     <string name="game_opened">OPEN</string>
-    <string name="game_time">Time %1$s</string>
-    <string name="game_time_best">Time %1$s · new best</string>
+    <string name="game_new_best">NEW BEST</string>
     <string name="game_previous_best">Previous best %1$s</string>
     <string name="game_clean">Clean pick: no drops, oversets or seizes.</string>
     <!-- Past participles: "1 dropped" and "2 dropped" read the same. -->
@@ -112,6 +111,10 @@
     <string name="stats_fps_pending">— fps</string>
     <string name="stats_idle">idle · on demand</string>
     <string name="stats_loading">loading model</string>
+
+    <!-- Juice -->
+    <string name="juice_unlocked">UNLOCKED</string>
+    <string name="juice_set">SET</string>
 
     <!-- Errors -->
     <string name="model_load_failed">Model failed to load: %1$s</string>

@@ -25,6 +25,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +55,11 @@ import com.lockpicking.bench.ui.bench.feedback.cueFor
 import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
 import com.lockpicking.bench.ui.bench.input.BenchTouchRouter
 import com.lockpicking.bench.ui.bench.input.TouchRect
+import com.lockpicking.bench.ui.bench.juice.BenchJuice
+import com.lockpicking.bench.ui.bench.juice.JuiceOverlay
+import com.lockpicking.bench.ui.bench.juice.JuiceRules
+import com.lockpicking.bench.ui.bench.juice.juiceShake
+import com.lockpicking.bench.ui.bench.juice.rememberBenchJuice
 import com.lockpicking.bench.ui.bench.scene.BenchScene
 import com.lockpicking.bench.ui.components.BenchButton
 import com.lockpicking.bench.ui.components.ControlBar
@@ -66,6 +72,7 @@ import com.lockpicking.bench.ui.components.StatusBlock
 import com.lockpicking.bench.ui.components.TensionLever
 import com.lockpicking.bench.ui.components.Vignette
 import com.lockpicking.bench.ui.components.WrenchThrowLength
+import com.lockpicking.bench.ui.components.arrive
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 import org.koin.compose.viewmodel.koinViewModel
@@ -155,7 +162,15 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       cue.sound?.let { sounds.play(it, cue.strength) }
     }
   }
-  LaunchedEffect(viewModel, feel) { viewModel.events.collect { feel(it) } }
+  // The HUD reacts to the same events, from this one collector: the channel has one reader.
+  val juice = rememberBenchJuice()
+  val currentState by rememberUpdatedState(state)
+  LaunchedEffect(viewModel, feel, juice) {
+    viewModel.events.collect {
+      feel(it)
+      juice.onEvent(it.event, currentState.juiceRules())
+    }
+  }
   LaunchedEffect(viewModel, feel) { viewModel.textures.collect { feel(it) } }
 
   val density = LocalDensity.current
@@ -231,6 +246,7 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       viewModel.onNextLock()
     },
     gameElapsedMillis = viewModel::gameElapsedMillis,
+    juice = juice,
     onPlaced = layout::place,
   ) { contentPadding ->
     // Until the saved lock is known the splash screen is still up: load nothing.
@@ -281,6 +297,7 @@ fun LockBenchScreen(
   onGuide: () -> Unit,
   gameElapsedMillis: () -> Long,
   modifier: Modifier = Modifier,
+  juice: BenchJuice = rememberBenchJuice(),
   onPlaced: (HudPart, Rect) -> Unit = { _, _ -> },
   scene: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
@@ -308,7 +325,7 @@ fun LockBenchScreen(
         .padding(insets)
         .padding(horizontal = HudMargin, vertical = 8.dp),
     ) {
-      Row(Modifier.fillMaxWidth().align(Alignment.TopStart), verticalAlignment = Alignment.Top) {
+      Row(Modifier.fillMaxWidth().align(Alignment.TopStart).juiceShake(juice), verticalAlignment = Alignment.Top) {
         val game = state.game
         if (game != null) {
           GameStatusBlock(game, state.lock, state.setCount, state.pinCount, gameElapsedMillis, Modifier.weight(1f).padding(end = 12.dp))
@@ -356,7 +373,9 @@ fun LockBenchScreen(
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomStart else Alignment.BottomEnd)
             .width(TensionZoneWidth)
-            .reportBounds { onPlaced(HudPart.Wrench, it) },
+            .reportBounds { onPlaced(HudPart.Wrench, it) }
+            // Inside the reported bounds: the shake never moves the zone under a thumb.
+            .juiceShake(juice),
         )
         PickPad(
           geometry = geometry,
@@ -375,10 +394,12 @@ fun LockBenchScreen(
           tool = state.tool,
           onTool = onTool.takeIf { state.hasRake },
           onToolSwitchPlaced = { onPlaced(HudPart.Tool, it) },
+          juice = juice,
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomEnd else Alignment.BottomStart)
             .width(PickPadWidth)
-            .reportBounds { onPlaced(HudPart.Pick, it) },
+            .reportBounds { onPlaced(HudPart.Pick, it) }
+            .juiceShake(juice),
         )
       }
       // With no lock on the bench there is no pad, and no switch on it to keep touches off.
@@ -427,7 +448,8 @@ fun LockBenchScreen(
             .align(Alignment.TopEnd)
             .padding(top = 56.dp)
             .width(DrawerWidth)
-            .reportBounds { onPlaced(HudPart.Controls, it) },
+            .reportBounds { onPlaced(HudPart.Controls, it) }
+            .arrive(),
         )
       }
       // A closed drawer is not in the way of anything.
@@ -440,10 +462,19 @@ fun LockBenchScreen(
             .padding(top = 56.dp)
             .width(GuideWidth)
             .fillMaxHeight()
-            .reportBounds { onPlaced(HudPart.Guide, it) },
+            .reportBounds { onPlaced(HudPart.Guide, it) }
+            .arrive(),
         )
       }
       DisposableEffect(guideOpen) { onDispose { onPlaced(HudPart.Guide, Rect.Zero) } }
     }
+    // Over everything, and takes no touches: flashes, confetti, the banner on release.
+    JuiceOverlay(juice, sceneInsets, showBanner = state.game == null)
   }
 }
+
+/** What the HUD may celebrate: only what the bench already shows. */
+private fun BenchUiState.juiceRules() = JuiceRules(
+  showSets = game?.tier?.showSetCount ?: true,
+  showPins = !blind,
+)

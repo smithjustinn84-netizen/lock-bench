@@ -1,5 +1,6 @@
 package com.lockpicking.bench.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.IntState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -50,6 +52,9 @@ private const val DIAL_SWEEP_DEGREES = 110f
 
 /** How far past the end of its scale the needle may still swing. */
 private const val DIAL_OVERSWING_DEGREES = 8.0
+
+/** The turned wedge of the dial, filled faintly behind the lit arc. */
+private const val DIAL_WEDGE_ALPHA = 0.12f
 
 /**
  * The tension wrench: a slide you hold and pull down, and the two things a hand on a real
@@ -101,10 +106,11 @@ fun TensionLever(
             }
           },
       )
+      val tint by animateColorAsState(band.tint, label = "bandTint")
       Text(
         if (showZones) stringResource(band.label) else "",
-        style = BenchType.Label,
-        color = band.tint,
+        style = BenchType.Button,
+        color = tint,
         modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
       )
     }
@@ -161,9 +167,42 @@ private fun DrawScope.drawTrack(torque: Float, showZones: Boolean, seizeAt: Floa
     else -> BenchColors.Brass
   }
   // A stem from the top of the slot, so the pull reads as a length and not just a position.
-  drawLine(color.copy(alpha = 0.55f), Offset(width / 2f, top), Offset(width / 2f, at), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-  drawRoundRect(color, Offset(2.dp.toPx(), at - slide / 2f), Size(width - 4.dp.toPx(), slide), CornerRadius(3.dp.toPx()))
+  val stem = 4.dp.toPx()
+  drawLine(color.copy(alpha = STEM_ALPHA), Offset(width / 2f, top), Offset(width / 2f, at), strokeWidth = stem, cap = StrokeCap.Round)
+  // The slide glows in its colour, harder the further into the seize it is pulled.
+  val strain = if (showZones && torque >= seizeAt) 1f else torque.coerceIn(0f, 1f) * GLOW_PER_TORQUE
+  if (torque > 0f) {
+    drawRoundRect(
+      color.copy(alpha = GLOW_ALPHA_BASE + GLOW_ALPHA_STRAIN * strain),
+      Offset(-3.dp.toPx(), at - slide / 2f - 5.dp.toPx()),
+      Size(width + 6.dp.toPx(), slide + 10.dp.toPx()),
+      CornerRadius(8.dp.toPx()),
+    )
+  }
+  drawGrip(color, Offset(2.dp.toPx(), at - slide / 2f), Size(width - 4.dp.toPx(), slide))
 }
+
+/** The slide the thumb holds: a coloured grip with a lit top edge and knurling across it. */
+private fun DrawScope.drawGrip(color: Color, at: Offset, size: Size) {
+  drawRoundRect(color, at, size, CornerRadius(3.dp.toPx()))
+  val hair = 1.dp.toPx()
+  val lip = at.y + hair
+  val inset = 3.dp.toPx()
+  drawLine(Color.White.copy(alpha = SHEEN_ALPHA), Offset(at.x + inset, lip), Offset(at.x + size.width - inset, lip), strokeWidth = hair)
+  val step = size.width / (KNURLS + 1)
+  for (k in 1..KNURLS) {
+    val kx = at.x + step * k
+    drawLine(Color.Black.copy(alpha = KNURL_ALPHA), Offset(kx, at.y + inset), Offset(kx, at.y + size.height - inset), strokeWidth = hair)
+  }
+}
+
+private const val STEM_ALPHA = 0.55f
+private const val GLOW_PER_TORQUE = 0.5f
+private const val GLOW_ALPHA_BASE = 0.12f
+private const val GLOW_ALPHA_STRAIN = 0.3f
+private const val SHEEN_ALPHA = 0.55f
+private const val KNURL_ALPHA = 0.35f
+private const val KNURLS = 5
 
 private fun DrawScope.zone(from: Float, to: Float, width: Float, color: Color) {
   drawRect(color, Offset(0f, from), Size(width, to - from))
@@ -188,12 +227,34 @@ private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean, arcStroke
     size = Size(radius * 2f, radius * 2f),
     style = arcStroke,
   )
+  // The arc the plug has turned through, lit, so a set reads as a step forward.
+  val swept = (plugDegrees / DIAL_FULL_DEGREES * DIAL_SWEEP_DEGREES).coerceIn(0f, DIAL_SWEEP_DEGREES + DIAL_OVERSWING_DEGREES.toFloat())
+  if (swept > 0f) {
+    drawArc(
+      color = BenchColors.Brass,
+      startAngle = -90f,
+      sweepAngle = swept,
+      useCenter = false,
+      topLeft = Offset(pivot.x - radius, pivot.y - radius),
+      size = Size(radius * 2f, radius * 2f),
+      style = arcStroke,
+    )
+    drawArc(
+      color = BenchColors.Brass.copy(alpha = DIAL_WEDGE_ALPHA),
+      startAngle = -90f,
+      sweepAngle = swept,
+      useCenter = true,
+      topLeft = Offset(pivot.x - radius, pivot.y - radius),
+      size = Size(radius * 2f, radius * 2f),
+    )
+  }
   // One tick per set; anything the needle shows beyond the last of them is not a real set.
   var tick = if (showTicks) 0f else Float.MAX_VALUE
   while (tick <= DIAL_FULL_DEGREES) {
     drawLine(BenchColors.Dim, at(tick, radius - 5.dp.toPx()), at(tick, radius), strokeWidth = 1.dp.toPx())
     tick += LockMechanics.SET_DEGREES
   }
-  drawLine(BenchColors.Text, pivot, at(plugDegrees, radius - 3.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-  drawCircle(BenchColors.Text, radius = 3.dp.toPx(), center = pivot)
+  drawLine(BenchColors.NickelLight, pivot, at(plugDegrees, radius - 3.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+  drawCircle(BenchColors.BrassDeep, radius = 5.dp.toPx(), center = pivot)
+  drawCircle(BenchColors.BrassLight, radius = 2.5.dp.toPx(), center = pivot)
 }
