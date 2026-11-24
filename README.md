@@ -88,6 +88,10 @@ The plug dial's needle stays on every tier, because a real picker feels the plug
 
 The **BENCH** button in the top corner opens a drawer, so nothing sits under your thumbs while you pick. The **GUIDE** button beside it opens a short primer on the parts of the lock and why picking works; the long version is [docs/LOCKSPORT.md](docs/LOCKSPORT.md). It is off during a blind round.
 
+<p align="center">
+  <img src="docs/screenshots/guide.png" width="70%" alt="The GUIDE panel open over the bench, explaining the rules, the parts of the lock and the shear line" />
+</p>
+
 | Control | What it does |
 | --- | --- |
 | **ISO / KEYWAY / SHEAR** | Camera presets. Tap the current one again to snap an orbited camera back. |
