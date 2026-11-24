@@ -208,7 +208,7 @@ class LockBenchViewModel(
       var last = 0L
       do {
         val now = clock.awaitFrameNanos()
-        val dt = if (last == 0L) FIRST_FRAME_SECONDS else ((now - last) / 1e9f).coerceIn(0f, MAX_FRAME_SECONDS)
+        val dt = if (last == 0L) FIRST_FRAME_SECONDS else ((now - last) / NANOS_PER_SECOND).coerceIn(0f, MAX_FRAME_SECONDS)
         last = now
         val moving = sim.advance(dt)
         onFrame(sim.pose, sim.readout)
@@ -488,6 +488,7 @@ class LockBenchViewModel(
   private companion object {
     const val FIRST_FRAME_SECONDS = 1f / 60f
     const val MAX_FRAME_SECONDS = 1f / 20f
+    const val NANOS_PER_SECOND = 1e9f
 
     /** 1 model unit = 100 mm. */
     const val MM_PER_UNIT = 100f

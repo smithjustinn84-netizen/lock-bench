@@ -163,8 +163,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   fun apply(pose: RigPose, pins: LockReadout): Boolean {
     val e = pose.explode
     // The shackle clears first, then the housing slides off sideways.
-    val shackleOut = smooth(e / 0.6f)
-    val bodyOut = smooth((e - 0.15f) / 0.85f)
+    val shackleOut = smooth(e / SHACKLE_OUT_BY)
+    val bodyOut = smooth((e - BODY_OUT_FROM) / BODY_OUT_SPAN)
 
     body.offset(x = -0.42f * bodyOut)
 
@@ -189,14 +189,14 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
       springs[i].offset(y = 0.24f * e)
       // The spring hangs from the top of the bible, so scaling Y squeezes it against the roof.
       val rest = pins.pin(i).springRest
-      val squeeze = ((rest - driverLift) / rest).coerceIn(0.25f, 1f)
+      val squeeze = ((rest - driverLift) / rest).coerceIn(MIN_SPRING_SQUEEZE, 1f)
       if (differs(appliedSpring[i], squeeze)) {
         appliedSpring[i] = squeeze
         springs[i].node.scale = Scale(1f, squeeze, 1f)
       }
     }
 
-    val wrenchVisible = pose.wrenchSeat > 0.02f
+    val wrenchVisible = pose.wrenchSeat > WRENCH_SHOWN_AT
     if (wrench.node.isVisible != wrenchVisible) wrench.node.isVisible = wrenchVisible
     wrench.offset(z = (1f - pose.wrenchSeat) * 0.10f + 0.14f * e)
     // The wrench is the plug's child and turns with it; under torque its handle springs on ahead.
@@ -210,13 +210,13 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
       appliedTool = inHand
       appliedPickPitch = Float.NaN
     }
-    val pickOut = 0.20f * e
+    val pickOut = PICK_EXPLODE * e
     inHand.offset(y = pose.pickY - inHand.rest.y, z = pose.pickZ - inHand.rest.z + pickOut)
     // The pick levers on the mouth of the keyway: as the tip rises the handle drops. The rake's
     // blade is the same lever, measured from where its lead peak just touches a pin at rest.
     val reach = pickFulcrumZ - pose.pickZ
     val rise = if (inHand === rake) pose.pickY - (pinRestY - RAKE_GAP) else pose.pickY - pinRestY
-    val pitch = if (reach > 0.02f) Math.toDegrees(atan2(rise, reach).toDouble()).toFloat() else 0f
+    val pitch = if (reach > MIN_LEVER_REACH) Math.toDegrees(atan2(rise, reach).toDouble()).toFloat() else 0f
     if (differs(appliedPickPitch, pitch)) {
       appliedPickPitch = pitch
       inHand.node.rotation = Rotation(x = pitch)
@@ -255,9 +255,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private fun applyBodyAlpha(alpha: Float): Boolean {
     if (!differs(appliedAlpha, alpha)) return false
     appliedAlpha = alpha
-    val solid = alpha > 0.995f
+    val solid = alpha > SOLID_ALPHA
     for ((instance, rgba) in bodyMaterials) {
-      instance.setParameter("baseColorFactor", rgba[0], rgba[1], rgba[2], rgba[3] * alpha)
+      instance.setParameter("baseColorFactor", rgba[0], rgba[1], rgba[2], rgba[ALPHA_CHANNEL] * alpha)
       // The housing is authored as a blended material so it can fade. While it is solid it
       // must still write depth, or its own far faces would draw over its near ones.
       instance.setDepthWrite(solid)
@@ -285,8 +285,32 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     /** Extra rise beyond the toe's engagement so the swing visibly clears the housing. */
     private const val SHACKLE_CLEARANCE = 0.022f
 
+    // Exploded view, over explode 0..1: the shackle is out by SHACKLE_OUT_BY, and the housing
+    // starts after BODY_OUT_FROM and takes the remaining BODY_OUT_SPAN.
+    private const val SHACKLE_OUT_BY = 0.6f
+    private const val BODY_OUT_FROM = 0.15f
+    private const val BODY_OUT_SPAN = 0.85f
+
+    /** How far the pick backs out of the keyway, fully exploded. */
+    private const val PICK_EXPLODE = 0.20f
+
+    /** A spring never draws shorter than this share of its rest length. */
+    private const val MIN_SPRING_SQUEEZE = 0.25f
+
+    /** The wrench is drawn once it is this far into the keyway. */
+    private const val WRENCH_SHOWN_AT = 0.02f
+
+    /** Closer to the fulcrum than this the pick's pitch is not worth solving for. */
+    private const val MIN_LEVER_REACH = 0.02f
+
+    /** Above this the housing is drawn as solid and writes depth. */
+    private const val SOLID_ALPHA = 0.995f
+    private const val ALPHA_CHANNEL = 3
+
     private fun differs(a: Float, b: Float) = a.isNaN() || abs(a - b) > EPS
 
+    // Smoothstep, 3x² − 2x³: the coefficients are the curve, not tuning.
+    @Suppress("MagicNumber")
     private fun smooth(t: Float): Float {
       val x = t.coerceIn(0f, 1f)
       return x * x * (3f - 2f * x)

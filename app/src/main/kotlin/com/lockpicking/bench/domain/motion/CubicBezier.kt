@@ -25,6 +25,8 @@ internal class CubicBezier(
     return bezier(t, y1, y2)
   }
 
+  // The cubic Bézier with end points 0 and 1; the 3s are its binomial coefficients.
+  @Suppress("MagicNumber")
   private fun bezier(t: Float, p1: Float, p2: Float): Float {
     val u = 1f - t
     return 3f * u * u * t * p1 + 3f * u * t * t * p2 + t * t * t

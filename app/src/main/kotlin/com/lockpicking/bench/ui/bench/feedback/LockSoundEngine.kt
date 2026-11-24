@@ -133,7 +133,7 @@ class LockSoundEngine(
       LockSound.Rattle -> {
         // The drivers land one after another, each a little quieter than the last.
         for ((k, at) in RATTLE_MS.withIndex()) {
-          after(at) { play(LockSfx.PinTouch, strength * (1f - 0.15f * k)) }
+          after(at) { play(LockSfx.PinTouch, strength * (1f - RATTLE_FADE_PER_DRIVER * k)) }
         }
       }
 
@@ -145,13 +145,13 @@ class LockSoundEngine(
 
       LockSound.Relock -> play(LockSfx.PadlockReset, strength)
 
-      LockSound.Touch -> play(LockSfx.PinTouch, strength * 0.6f)
+      LockSound.Touch -> play(LockSfx.PinTouch, strength * TOUCH_VOLUME)
 
-      LockSound.Knock -> play(LockSfx.PinOvershoot, strength * 0.5f)
+      LockSound.Knock -> play(LockSfx.PinOvershoot, strength * KNOCK_VOLUME)
 
-      LockSound.Scrape -> play(LockSfx.PinSlide, strength * 0.5f)
+      LockSound.Scrape -> play(LockSfx.PinSlide, strength * SCRAPE_VOLUME)
 
-      LockSound.Creak -> play(LockSfx.CoreTensionCreak, strength * 0.6f)
+      LockSound.Creak -> play(LockSfx.CoreTensionCreak, strength * CREAK_VOLUME)
     }
   }
 
@@ -193,6 +193,15 @@ class LockSoundEngine(
 
     /** When each driver lands after the torque comes off. */
     val RATTLE_MS = longArrayOf(0, 24, 55, 97)
+
+    /** How much quieter each driver in the rattle lands than the one before. */
+    const val RATTLE_FADE_PER_DRIVER = 0.15f
+
+    // Recordings borrowed for a quieter sound than they were made for.
+    const val TOUCH_VOLUME = 0.6f
+    const val KNOCK_VOLUME = 0.5f
+    const val SCRAPE_VOLUME = 0.5f
+    const val CREAK_VOLUME = 0.6f
 
     /** The stop at the end of `plug_turn_open` falls about here. */
     const val SHACKLE_AFTER_TURN_MS = 195L

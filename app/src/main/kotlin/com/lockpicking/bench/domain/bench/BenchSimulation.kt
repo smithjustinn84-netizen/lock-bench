@@ -575,6 +575,8 @@ class BenchSimulation(
     /** How long the status goes on naming the pin that last stopped the rake. */
     const val BLOCK_LINGER_SECONDS = 0.5f
 
+    // Smoothstep, 3x² − 2x³: the coefficients are the curve, not tuning.
+    @Suppress("MagicNumber")
     fun smooth(t: Float): Float {
       val x = t.coerceIn(0f, 1f)
       return x * x * (3f - 2f * x)

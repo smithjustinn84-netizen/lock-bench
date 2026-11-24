@@ -26,11 +26,20 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 private const val TIMER_REFRESH_MILLIS = 100L
+private const val MILLIS_PER_TENTH = 100
+private const val TENTHS_PER_SECOND = 10
+private const val TENTHS_PER_MINUTE = 600
+private const val SECONDS_PER_MINUTE = 60
 
 /** 83_400 ms as "1:23.4". */
 fun formatGameTime(millis: Long): String {
-  val tenths = millis / 100
-  return "%d:%02d.%d".format(Locale.US, tenths / 600, (tenths / 10) % 60, tenths % 10)
+  val tenths = millis / MILLIS_PER_TENTH
+  return "%d:%02d.%d".format(
+    Locale.US,
+    tenths / TENTHS_PER_MINUTE,
+    (tenths / TENTHS_PER_SECOND) % SECONDS_PER_MINUTE,
+    tenths % TENTHS_PER_SECOND,
+  )
 }
 
 /**

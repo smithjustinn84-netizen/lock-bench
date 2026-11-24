@@ -48,6 +48,9 @@ private val GaugeWidth = 84.dp
 private const val DIAL_FULL_DEGREES = 12.5f
 private const val DIAL_SWEEP_DEGREES = 110f
 
+/** How far past the end of its scale the needle may still swing. */
+private const val DIAL_OVERSWING_DEGREES = 8.0
+
 /**
  * The tension wrench: a slide you hold and pull down, and the two things a hand on a real
  * wrench feels — how hard it is pulling, and how far the plug has turned.
@@ -171,7 +174,8 @@ private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean, arcStroke
   val radius = 34.dp.toPx()
   val pivot = Offset(TrackWidth.toPx() + 14.dp.toPx(), radius + 6.dp.toPx())
   fun at(degrees: Float, r: Float): Offset {
-    val swing = Math.toRadians((degrees / DIAL_FULL_DEGREES * DIAL_SWEEP_DEGREES).toDouble().coerceIn(0.0, DIAL_SWEEP_DEGREES + 8.0))
+    val sweep = (degrees / DIAL_FULL_DEGREES * DIAL_SWEEP_DEGREES).toDouble()
+    val swing = Math.toRadians(sweep.coerceIn(0.0, DIAL_SWEEP_DEGREES + DIAL_OVERSWING_DEGREES))
     return Offset(pivot.x + r * sin(swing).toFloat(), pivot.y - r * cos(swing).toFloat())
   }
 

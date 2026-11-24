@@ -15,6 +15,8 @@ import com.lockpicking.bench.ui.bench.LockBenchViewModel
 import com.lockpicking.bench.ui.theme.BenchTheme
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
+private const val SPLASH_FADE_MILLIS = 220L
+
 class MainActivity : ComponentActivity() {
   /** The same view model the bench screen gets: the activity is its owner. */
   private val bench: LockBenchViewModel by viewModel()
@@ -28,7 +30,7 @@ class MainActivity : ComponentActivity() {
     splashScreen.setOnExitAnimationListener { splashView ->
       splashView.view.animate()
         .alpha(0f)
-        .setDuration(220L)
+        .setDuration(SPLASH_FADE_MILLIS)
         .setInterpolator(AccelerateInterpolator())
         .setListener(object : AnimatorListenerAdapter() {
           override fun onAnimationEnd(animation: Animator) {

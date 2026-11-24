@@ -199,7 +199,7 @@ private fun DrawScope.drawLands(geometry: LockGeometry, scale: StackScale) {
 
 /** The hook pick, in from the mouth on the left, with its tip at ([tipX], [tipY]). */
 private fun DrawScope.drawPick(tipX: Float, tipY: Float, scale: StackScale) {
-  val hook = 0.012f * scale.unit
+  val hook = HOOK_RISE * scale.unit
   val shaftY = tipY + hook
   val stroke = 2.5.dp.toPx()
   drawLine(BenchColors.Nickel, Offset(-stroke, shaftY), Offset(tipX, shaftY), strokeWidth = stroke, cap = StrokeCap.Round)
@@ -225,7 +225,7 @@ private fun DrawScope.drawRake(tipZ: Float, tipY: Float, rake: RakeProfile, ink:
   // Canvas X of a point [behind] the lead peak: the mouth is the left edge, the back wall the right.
   fun x(behind: Float) = size.width * ((keyway.mouthZ - tipZ) * outward - behind) / span
   fun y(behind: Float): Float {
-    val lever = if (reach > 0.02f) (1f - behind / reach).coerceAtLeast(0f) else 1f
+    val lever = if (reach > MIN_LEVER_REACH) (1f - behind / reach).coerceAtLeast(0f) else 1f
     return scale.y(contact + lift * lever + rake.heightAt(behind))
   }
   val blade = ink.rakePath
@@ -234,13 +234,14 @@ private fun DrawScope.drawRake(tipZ: Float, tipY: Float, rake: RakeProfile, ink:
   blade.moveTo(x(behind), y(behind))
   val shankFrom = (rake.peaks - 1) * rake.pitch + rake.pitch / 2f
   while (behind < shankFrom) {
-    behind = (behind + rake.pitch / 12f).coerceAtMost(shankFrom)
+    behind = (behind + rake.pitch / RAKE_STEPS_PER_PITCH).coerceAtMost(shankFrom)
     blade.lineTo(x(behind), y(behind))
   }
   // The shank runs out through the mouth and off the pad.
-  val out = (keyway.mouthZ - tipZ) * outward + span * 0.1f
+  val out = (keyway.mouthZ - tipZ) * outward + span * SHANK_OVERHANG
   if (out > shankFrom) {
-    blade.lineTo(x(shankFrom + rake.pitch / 4f), y(shankFrom + rake.pitch / 4f))
+    val knee = shankFrom + rake.pitch / SHANK_KNEE_DIVISOR
+    blade.lineTo(x(knee), y(knee))
     blade.lineTo(x(out), y(out))
   }
   drawPath(blade, BenchColors.Nickel, style = ink.rakeStroke)
@@ -252,6 +253,40 @@ private const val PIN_WIDTH = 0.032f
 
 /** Daylight between the rake's lead peak and a pin at rest: PickMotion's PICK_GAP. */
 private const val RAKE_GAP = 0.002f
+
+/** How far the hook's tip stands up from its shaft, in model units. */
+private const val HOOK_RISE = 0.012f
+
+/** Closer to the fulcrum than this the rake is drawn level rather than levered. */
+private const val MIN_LEVER_REACH = 0.02f
+
+/** Line segments per peak along the rake's blade. */
+private const val RAKE_STEPS_PER_PITCH = 12f
+
+/** The shank bends down a quarter pitch behind the last peak. */
+private const val SHANK_KNEE_DIVISOR = 4f
+
+/** How far past the mouth the shank is drawn, as a share of the keyway's length. */
+private const val SHANK_OVERHANG = 0.1f
+
+/** How far a fully tilted spool driver's foot shifts, as a share of the pin's width. */
+private const val SPOOL_COCK = 0.16f
+
+/** Depth of a key pin's tapered tip, in model units, and its half-width at the very end. */
+private const val KEY_TIP_TAPER = 0.014f
+private const val KEY_TIP_HALF_WIDTH = 0.18f
+
+// Security cuts, as shares of the pin's width.
+private const val SPOOL_WAIST_INSET = 0.22f
+private const val SERRATION_NICK = 0.2f
+
+private const val SPRING_TURNS = 6
+
+/** Half the spring's zigzag width, as a share of the pin's width. */
+private const val SPRING_HALF_WIDTH = 0.36f
+
+/** Each zig of the spring lands halfway through its step. */
+private const val ZIG_MIDSTEP = 0.5f
 
 /** Room for the two tool buttons in the header. */
 private val ToolSwitchWidth = 148.dp
@@ -303,7 +338,7 @@ private fun DrawScope.drawPinStack(i: Int, pins: LockReadout, ink: PadInk, isBin
   val pinWidth = ink.pinWidth
   val left = cx - pinWidth / 2f
   // In a false set the turned plug has carried the foot of the driver sideways.
-  val cocked = pins.driverTilt(i) * pinWidth * 0.16f
+  val cocked = pins.driverTilt(i) * pinWidth * SPOOL_COCK
 
   // Chamber: the plug's bore below the shear line, the bible above it.
   drawRoundRect(
@@ -334,9 +369,9 @@ private fun DrawScope.drawPinStack(i: Int, pins: LockReadout, ink: PadInk, isBin
   val keyPath = ink.keyPaths[i].apply {
     rewind()
     // Tapered tip at the bottom, as on the model.
-    val taper = 0.014f * scale.unit
-    moveTo(cx - pinWidth * 0.18f, scale.y(keyBase))
-    lineTo(cx + pinWidth * 0.18f, scale.y(keyBase))
+    val taper = KEY_TIP_TAPER * scale.unit
+    moveTo(cx - pinWidth * KEY_TIP_HALF_WIDTH, scale.y(keyBase))
+    lineTo(cx + pinWidth * KEY_TIP_HALF_WIDTH, scale.y(keyBase))
     lineTo(left + pinWidth, scale.y(keyBase) - taper)
     lineTo(left + pinWidth, scale.y(keyTop) + 1f)
     lineTo(left, scale.y(keyTop) + 1f)
@@ -369,13 +404,13 @@ private fun DrawScope.drawDriverCuts(spec: PinSpec, left: Float, bottom: Float, 
   val scale = ink.scale
   if (spec.spool) {
     val flange = LockMechanics.SPOOL_FLANGE * scale.unit
-    val inset = pinWidth * 0.22f
+    val inset = pinWidth * SPOOL_WAIST_INSET
     val waist = bottom - top - 2f * flange
     drawRect(BenchColors.Ink, Offset(left, top + flange), Size(inset, waist))
     drawRect(BenchColors.Ink, Offset(left + pinWidth - inset, top + flange), Size(inset, waist))
   }
   if (!spec.serrated) return
-  val nick = pinWidth * 0.2f
+  val nick = pinWidth * SERRATION_NICK
   val stroke = 1.5.dp.toPx()
   fun nicks(y: Float) {
     drawLine(BenchColors.Ink, Offset(left, y), Offset(left + nick, y), strokeWidth = stroke)
@@ -409,14 +444,14 @@ private fun DrawScope.drawShearLine(y: Float, opened: Boolean, glow: Float, ink:
 }
 
 private fun DrawScope.drawSpring(i: Int, ink: PadInk, cx: Float, top: Float, bottom: Float) {
-  val turns = 6
-  val halfWidth = ink.pinWidth * 0.36f
+  val turns = SPRING_TURNS
+  val halfWidth = ink.pinWidth * SPRING_HALF_WIDTH
   val path = ink.springPaths[i].apply {
     rewind()
     moveTo(cx, top)
     val step = (bottom - top) / (turns * 2)
     for (k in 1..turns * 2) {
-      lineTo(cx + if (k % 2 == 1) halfWidth else -halfWidth, top + step * (k - 0.5f))
+      lineTo(cx + if (k % 2 == 1) halfWidth else -halfWidth, top + step * (k - ZIG_MIDSTEP))
     }
     lineTo(cx, bottom)
   }

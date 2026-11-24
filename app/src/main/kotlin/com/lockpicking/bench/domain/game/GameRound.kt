@@ -117,13 +117,17 @@ class GameRound(
   }
 
   private fun stars(): Int = when {
-    mistakes == 0 && finishedAfter <= parSeconds * 1000L -> 3
+    mistakes == 0 && finishedAfter <= parSeconds * MILLIS_PER_SECOND -> PERFECT_STARS
     mistakes <= 2 -> 2
     else -> 1
   }
 
   private companion object {
     const val NOT_YET = -1L
+    const val MILLIS_PER_SECOND = 1000L
+
+    /** Clean and under par. */
+    const val PERFECT_STARS = 3
 
     fun shuffle(pinCount: Int, random: Random, avoid: List<Int>?): List<Int> {
       val pins = (0 until pinCount).toList()

@@ -32,7 +32,7 @@ internal class SpringValue(
       value += velocity * h
       remaining -= h
     }
-    if (abs(target - value) < epsilon && abs(velocity) < epsilon * 20f) {
+    if (abs(target - value) < epsilon && abs(velocity) < epsilon * SETTLE_VELOCITY_FACTOR) {
       value = target
       velocity = 0f
       return false
@@ -42,5 +42,8 @@ internal class SpringValue(
 
   private companion object {
     const val MAX_STEP = 1f / 120f
+
+    /** At rest once the speed is this many times [epsilon] per second or less. */
+    const val SETTLE_VELOCITY_FACTOR = 20f
   }
 }

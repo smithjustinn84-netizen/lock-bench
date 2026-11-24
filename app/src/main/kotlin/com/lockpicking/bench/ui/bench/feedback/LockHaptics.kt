@@ -42,7 +42,7 @@ class LockHaptics(context: Context) {
       if (now - lastTexture < TEXTURE_GAP_MILLIS) return
       lastTexture = now
     }
-    val level = strength.coerceIn(0.05f, 1f)
+    val level = strength.coerceIn(MIN_LEVEL, 1f)
     val effect = if (primitives) composed(haptic, level) else pulsed(haptic, level)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
@@ -68,16 +68,11 @@ class LockHaptics(context: Context) {
 
       Haptic.Grain -> composition.addPrimitive(low, level)
 
-      Haptic.Refuse -> composition.addPrimitive(thud, level).addPrimitive(thud, level * 0.7f, 70)
+      Haptic.Refuse -> composition.addPrimitive(thud, level).addPrimitive(thud, level * REFUSE_ECHO_SCALE, REFUSE_ECHO_DELAY_MILLIS)
 
-      Haptic.Rattle ->
-        composition
-          .addPrimitive(tick, level)
-          .addPrimitive(tick, level * 0.8f, 22)
-          .addPrimitive(tick, level * 0.6f, 33)
-          .addPrimitive(tick, level * 0.45f, 44)
+      Haptic.Rattle -> composition.addRattle(tick, level)
 
-      Haptic.Release -> composition.addPrimitive(click, level * 0.7f).addPrimitive(thud, level, 110)
+      Haptic.Release -> composition.addPrimitive(click, level * RELEASE_CLICK_SCALE).addPrimitive(thud, level, RELEASE_THUD_DELAY_MILLIS)
 
       Haptic.Bump -> composition.addPrimitive(low, level)
 
@@ -91,29 +86,64 @@ class LockHaptics(context: Context) {
     return composition.compose()
   }
 
+  /** A tick and then [RATTLE_TAIL]: each fainter and further apart. */
+  @RequiresApi(Build.VERSION_CODES.R)
+  private fun VibrationEffect.Composition.addRattle(tick: Int, level: Float) {
+    addPrimitive(tick, level)
+    for ((scale, delay) in RATTLE_TAIL) addPrimitive(tick, level * scale, delay)
+  }
+
   private fun pulsed(haptic: Haptic, level: Float): VibrationEffect {
-    val strength = if (amplitude) (level * 255).roundToInt().coerceIn(1, 255) else VibrationEffect.DEFAULT_AMPLITUDE
-    fun pattern(vararg millis: Long): VibrationEffect {
+    val strength = if (amplitude) (level * MAX_AMPLITUDE).roundToInt().coerceIn(1, MAX_AMPLITUDE) else VibrationEffect.DEFAULT_AMPLITUDE
+    fun pattern(millis: LongArray): VibrationEffect {
       // Timings alternate off, on, off, on…; an amplitude of 0 is the off stretch.
       val amplitudes = IntArray(millis.size) { if (it % 2 == 1) strength else 0 }
       return if (amplitude) VibrationEffect.createWaveform(millis, amplitudes, -1) else VibrationEffect.createWaveform(millis, -1)
     }
     return when (haptic) {
-      Haptic.Click -> VibrationEffect.createOneShot(12, strength)
-      Haptic.Thud -> VibrationEffect.createOneShot(28, strength)
-      Haptic.Tick -> VibrationEffect.createOneShot(7, strength)
-      Haptic.Grain -> VibrationEffect.createOneShot(5, strength)
-      Haptic.Refuse -> pattern(0, 22, 60, 18)
-      Haptic.Rattle -> pattern(0, 7, 20, 7, 30, 6, 40, 5)
-      Haptic.Release -> pattern(0, 12, 100, 30)
-      Haptic.Bump -> VibrationEffect.createOneShot(9, strength)
-      Haptic.Knock -> VibrationEffect.createOneShot(16, strength)
-      Haptic.Scrape -> VibrationEffect.createOneShot(6, strength)
-      Haptic.Spring -> VibrationEffect.createOneShot(4, strength)
+      Haptic.Click -> VibrationEffect.createOneShot(CLICK_MILLIS, strength)
+      Haptic.Thud -> VibrationEffect.createOneShot(THUD_MILLIS, strength)
+      Haptic.Tick -> VibrationEffect.createOneShot(TICK_MILLIS, strength)
+      Haptic.Grain -> VibrationEffect.createOneShot(GRAIN_MILLIS, strength)
+      Haptic.Refuse -> pattern(REFUSE_PULSES)
+      Haptic.Rattle -> pattern(RATTLE_PULSES)
+      Haptic.Release -> pattern(RELEASE_PULSES)
+      Haptic.Bump -> VibrationEffect.createOneShot(BUMP_MILLIS, strength)
+      Haptic.Knock -> VibrationEffect.createOneShot(KNOCK_MILLIS, strength)
+      Haptic.Scrape -> VibrationEffect.createOneShot(SCRAPE_MILLIS, strength)
+      Haptic.Spring -> VibrationEffect.createOneShot(SPRING_MILLIS, strength)
     }
   }
 
   private companion object {
     const val TEXTURE_GAP_MILLIS = 30L
+
+    /** Below this a primitive is too faint to feel at all. */
+    const val MIN_LEVEL = 0.05f
+    const val MAX_AMPLITUDE = 255
+
+    // Composed shapes: how much softer, and how many milliseconds later, each follow-up lands.
+    const val REFUSE_ECHO_SCALE = 0.7f
+    const val REFUSE_ECHO_DELAY_MILLIS = 70
+    const val RELEASE_CLICK_SCALE = 0.7f
+    const val RELEASE_THUD_DELAY_MILLIS = 110
+
+    /** The ticks after the first in a rattle: (scale, delay in ms), each fainter and further apart. */
+    val RATTLE_TAIL = listOf(0.8f to 22, 0.6f to 33, 0.45f to 44)
+
+    // Pulsed fallbacks: one-shot lengths in milliseconds.
+    const val CLICK_MILLIS = 12L
+    const val THUD_MILLIS = 28L
+    const val TICK_MILLIS = 7L
+    const val GRAIN_MILLIS = 5L
+    const val BUMP_MILLIS = 9L
+    const val KNOCK_MILLIS = 16L
+    const val SCRAPE_MILLIS = 6L
+    const val SPRING_MILLIS = 4L
+
+    // Pulsed fallbacks: off, on, off, on… in milliseconds.
+    val REFUSE_PULSES = longArrayOf(0, 22, 60, 18)
+    val RATTLE_PULSES = longArrayOf(0, 7, 20, 7, 30, 6, 40, 5)
+    val RELEASE_PULSES = longArrayOf(0, 12, 100, 30)
   }
 }
