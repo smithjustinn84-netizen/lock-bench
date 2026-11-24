@@ -10,11 +10,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.data.AssetPaths
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.bench.FrameMeter
 import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
+import com.lockpicking.bench.ui.bench.input.screenRectAround
+import dev.romainguy.kotlin.math.Float3
 import io.github.sceneview.ExperimentalSceneViewApi
 import io.github.sceneview.SceneView
 import io.github.sceneview.environment.rememberHDREnvironment
@@ -34,6 +38,9 @@ import io.github.sceneview.rememberRenderer
 import io.github.sceneview.rememberView
 
 private const val TAG = "BenchScene"
+
+/** Slack around the shackle that still counts as a tap on it: it is a thin bar, and a fingertip is not. */
+private val SHACKLE_TAP_PAD = 16.dp
 
 /** The dark backdrop behind the lock, linear RGBA. The studio HDR lights the room but is not drawn. */
 private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
@@ -105,6 +112,20 @@ fun BenchScene(
   )
 
   var rig by remember { mutableStateOf<LockRig?>(null) }
+
+  // A tap on the 3D view that is not a thumb zone's: if it lands on the shackle, tell the host.
+  val tapPadPx = with(LocalDensity.current) { SHACKLE_TAP_PAD.toPx() }
+  LaunchedEffect(touch, cameraNode, tapPadPx) {
+    touch.router.onSceneTap = tap@{ x, y ->
+      val box = rig?.shackleTapBox() ?: return@tap
+      val viewport = cameraNode.viewport ?: return@tap
+      // A corner behind the camera has no place on screen.
+      val corners = box.corners().mapNotNull { c -> cameraNode.worldToView(Float3(c[0], c[1], c[2]))?.let { it.x to it.y } }
+      if (corners.isEmpty()) return@tap
+      val rect = screenRectAround(corners, viewport.width.toFloat(), viewport.height.toFloat(), tapPadPx)
+      if (rect.contains(x, y)) host.onShackleTapped()
+    }
+  }
 
   SceneView(
     modifier = modifier,

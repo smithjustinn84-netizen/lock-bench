@@ -230,6 +230,59 @@ class BenchTouchRouterTest {
     assertEquals(2, calls.size)
   }
 
+  private val taps = mutableListOf<Pair<Float, Float>>()
+
+  @Test
+  fun `one finger down and up on the scene is a tap`() {
+    router.onSceneTap = { x, y -> taps += x to y }
+    assertFalse("the camera still sees it", down(0, 400f, 300f))
+    router.onMove(0, 404f, 303f)
+    assertFalse(router.onUp(0))
+    assertEquals(listOf(400f to 300f), taps)
+    assertTrue("the bench was not touched", calls.isEmpty())
+  }
+
+  @Test
+  fun `a drag or a pinch on the scene is not a tap`() {
+    router.onSceneTap = { x, y -> taps += x to y }
+    down(0, 400f, 300f)
+    router.onMove(0, 460f, 300f)
+    router.onUp(0)
+    down(0, 400f, 300f)
+    down(1, 450f, 350f)
+    router.onUp(1)
+    router.onUp(0)
+    assertTrue(taps.isEmpty())
+  }
+
+  @Test
+  fun `taps on the thumb zones and on panels are not scene taps`() {
+    router.onSceneTap = { x, y -> taps += x to y }
+    router.blocked = listOf(TouchRect(300f, 0f, 500f, 100f))
+    down(0, ZONE_X, 400f)
+    router.onUp(0)
+    down(0, 800f, 400f)
+    router.onUp(0)
+    down(0, 400f, 50f)
+    router.onUp(0)
+    assertTrue(taps.isEmpty())
+  }
+
+  @Test
+  fun `a locked camera swallows its gestures but still hears a tap`() {
+    router.onSceneTap = { x, y -> taps += x to y }
+    router.cameraLocked = true
+    assertTrue(down(0, 400f, 300f))
+    assertTrue(router.consumesGesture)
+    assertTrue(router.onMove(0, 500f, 300f))
+    assertTrue(router.onUp(0))
+    assertTrue("a drag is still not a tap", taps.isEmpty())
+    down(0, 400f, 300f)
+    router.onUp(0)
+    assertEquals(1, taps.size)
+    assertFalse(router.ownsGesture)
+  }
+
   @Test
   fun `the throw curve spends most of its travel on light torque`() {
     assertEquals(0f, WrenchThrow.torqueAt(0f), 0f)

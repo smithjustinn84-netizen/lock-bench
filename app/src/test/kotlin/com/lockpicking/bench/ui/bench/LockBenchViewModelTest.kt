@@ -1,8 +1,11 @@
 package com.lockpicking.bench.ui.bench
 
+import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.domain.bench.Keyway
+import com.lockpicking.bench.domain.game.GameClock
+import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.PinState
@@ -24,6 +27,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -45,7 +49,20 @@ class LockBenchViewModelTest {
   @After
   fun tearDown() = Dispatchers.resetMain()
 
-  private fun viewModel(result: () -> GlbInfo = { modelInfo }) = LockBenchViewModel(FakeRepository(result))
+  private class FakeRecords : GameRecords {
+    val best = mutableMapOf<GameTier, Long>()
+    override fun bestMillis(tier: GameTier): Long? = best[tier]
+    override fun saveBest(tier: GameTier, millis: Long) {
+      best[tier] = millis
+    }
+  }
+
+  private val records = FakeRecords()
+
+  /** The round's clock runs on the test scheduler's virtual time. */
+  private val clock = GameClock { dispatcher.scheduler.currentTime }
+
+  private fun viewModel(result: () -> GlbInfo = { modelInfo }) = LockBenchViewModel(FakeRepository(result), records, clock)
 
   /** A 60 fps display on the test scheduler's virtual clock. */
   private fun TestScope.frameClock() = FrameClock {
@@ -81,6 +98,31 @@ class LockBenchViewModelTest {
       if (vm.uiState.value.opened) return@repeat
       vm.onPinTapped(vm.uiState.value.bindingPin)
       play()
+    }
+  }
+
+  /**
+   * Picks the lock open by hand, the way a player has to when blind: light tension, then the
+   * binding pin raised a little at a time until it sets.
+   */
+  private fun TestScope.pickOpenByHand(vm: LockBenchViewModel) {
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    repeat(4 * testGeometry.pinCount) {
+      val state = vm.uiState.value
+      if (state.opened) return
+      val pin = state.bindingPin
+      if (pin < 0) return@repeat
+      vm.dragPin(pin, 0f)
+      play(0.2f)
+      var fraction = 0f
+      while (fraction < 1f && vm.readout!!.state(pin) != PinState.Set && !vm.uiState.value.opened) {
+        fraction += 0.02f
+        vm.dragPin(pin, fraction)
+        play(0.1f)
+      }
+      vm.onPickRested()
+      play(0.3f)
     }
   }
 
@@ -282,6 +324,114 @@ class LockBenchViewModelTest {
     assertFalse(state.opened)
     assertFalse(state.tension)
     assertEquals(0, state.setCount)
+  }
+
+  @Test
+  fun `a blind round hides the bench's aids and ignores pin taps`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGhostToggled()
+    vm.onGameStarted(GameTier.Journeyman)
+    val state = vm.uiState.value
+    assertTrue(state.blind)
+    assertFalse(state.hints)
+    assertFalse(state.ghost)
+    assertEquals(CameraPreset.Blind, state.preset)
+
+    // None of the see-through controls work while picking blind.
+    vm.onHintsToggled()
+    vm.onGhostToggled()
+    vm.onPresetSelected(CameraPreset.ShearSide)
+    vm.onWrenchPulled(0.5f)
+    play(0.5f)
+    vm.onPinTapped(vm.uiState.value.bindingPin)
+    vm.onPickTapped(0.5f)
+    play()
+    assertFalse(vm.uiState.value.hints)
+    assertFalse(vm.uiState.value.ghost)
+    assertEquals(CameraPreset.Blind, vm.uiState.value.preset)
+    assertEquals(0, vm.uiState.value.setCount)
+  }
+
+  @Test
+  fun `the clock starts on the first pull and stops while paused`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    play(1f)
+    assertEquals(0L, vm.gameElapsedMillis())
+    vm.onWrenchPulled(0.3f)
+    play(1f)
+    val running = vm.gameElapsedMillis()
+    assertTrue(running in 900L..1100L)
+    vm.onPaused()
+    play(5f)
+    assertEquals(running, vm.gameElapsedMillis())
+    vm.onResumed()
+    play(1f)
+    assertTrue(vm.gameElapsedMillis() > running)
+  }
+
+  @Test
+  fun `opening a blind lock scores the round, reveals the pins and keeps the best time`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    pickOpenByHand(vm)
+    val state = vm.uiState.value
+    assertTrue(state.opened)
+    val result = state.game?.result
+    assertNotNull(result)
+    result!!
+    assertFalse("the reveal shows the pins", state.blind)
+    assertEquals(CameraPreset.ShearSide, state.preset)
+    assertTrue(result.newBest)
+    assertEquals(result.timeMillis, records.best[GameTier.Apprentice])
+    assertTrue(result.stars in 1..3)
+
+    // The clock is stopped once the shackle releases.
+    play(3f)
+    assertEquals(result.timeMillis, vm.gameElapsedMillis())
+  }
+
+  @Test
+  fun `tapping the shackle of an open lock relocks it`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    assertFalse("a closed lock ignores the tap", vm.onShackleTapped())
+    pickOpen(vm)
+    assertTrue(vm.onShackleTapped())
+    play(5f)
+    assertFalse(vm.uiState.value.opened)
+    assertEquals(0, vm.uiState.value.setCount)
+  }
+
+  @Test
+  fun `tapping the shackle after a blind round deals the next lock`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    pickOpenByHand(vm)
+    assertTrue(vm.uiState.value.opened)
+    assertTrue(vm.onShackleTapped())
+    play(5f)
+    val state = vm.uiState.value
+    assertFalse(state.opened)
+    assertTrue(state.blind)
+    assertEquals(2, state.game!!.lockNumber)
+    assertEquals(CameraPreset.Blind, state.preset)
+    assertNull(state.game.result)
+  }
+
+  @Test
+  fun `giving up goes back to the open bench and its usual lock`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Master)
+    vm.onGameQuit()
+    play()
+    val state = vm.uiState.value
+    assertNull(state.game)
+    assertTrue(state.hints)
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    // The usual lock: pin 3 is first in its order, but a spool at rest has its flange clear of
+    // the shear line, so pin 1 is the one that binds.
+    assertEquals(0, vm.uiState.value.bindingPin)
   }
 
   private companion object {

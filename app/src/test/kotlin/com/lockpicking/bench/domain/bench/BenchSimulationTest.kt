@@ -53,6 +53,23 @@ class BenchSimulationTest {
     check(sim.snapshot().opened)
   }
 
+  @Test
+  fun `a dealt lock binds in its own order and still opens`() {
+    sim.deal(listOf(3, 2, 1, 0))
+    settle()
+    pull(EASED)
+    assertEquals(3, sim.snapshot().bindingPin)
+    openLock()
+  }
+
+  @Test
+  fun `a dealt lock can seize at a lighter pull`() {
+    sim.deal(listOf(0, 1, 2, 3), seizeAt = 0.55f)
+    settle()
+    pull(0.6f)
+    assertEquals(TorqueBand.Heavy, sim.snapshot().band)
+  }
+
   /** Sets the two standard pins and lifts pin 2 off its flange: the plug drops into the spools. */
   private fun dropIntoFalseSet() {
     repeat(2) {

@@ -28,11 +28,37 @@ class LockMechanics(
   /** Length of a driver pin. A spool's waist lies between a [SPOOL_FLANGE] at each end of it. */
   val driverLength: Float = DEFAULT_DRIVER_LENGTH,
   /** Pin indices from the tightest chamber to the loosest: among equals, the first one binds. */
-  val bindingOrder: List<Int> = DEFAULT_BINDING_ORDER.filter { it < pins.size },
+  bindingOrder: List<Int> = DEFAULT_BINDING_ORDER.filter { it < pins.size },
   private val onEvent: (LockEvent) -> Unit = {},
 ) : LockReadout {
+  /** Pin indices from the tightest chamber to the loosest. Changed only by [rekey]. */
+  var bindingOrder: List<Int> = bindingOrder
+    private set
+
+  /** At or above this torque the binding pin seizes, until it falls to [seizeOffAt]. */
+  var seizeAt = T_HEAVY
+    private set
+  var seizeOffAt = T_HEAVY_OFF
+    private set
+
   init {
-    require(bindingOrder.sorted() == pins.indices.toList()) { "bindingOrder must name each pin once" }
+    requireOrder(bindingOrder)
+  }
+
+  /**
+   * A different lock in the same housing: chambers bored to another tolerance stack-up, and
+   * pins that seize at [seizeAt]. Takes effect from the next time the plug takes up.
+   */
+  fun rekey(order: List<Int>, seizeAt: Float = T_HEAVY, seizeOffAt: Float = seizeAt - (T_HEAVY - T_HEAVY_OFF)) {
+    requireOrder(order)
+    require(seizeOffAt < seizeAt && seizeAt > T_SPOOL_BLOCK) { "the seize band must sit above the spools" }
+    bindingOrder = order
+    this.seizeAt = seizeAt
+    this.seizeOffAt = seizeOffAt
+  }
+
+  private fun requireOrder(order: List<Int>) {
+    require(order.sorted() == pins.indices.toList()) { "bindingOrder must name each pin once" }
   }
 
   /** Torque on the plug from the wrench, 0..1. */
@@ -312,10 +338,10 @@ class LockMechanics(
       engaged = false
       drop()
     }
-    if (!seized && torque >= T_HEAVY) {
+    if (!seized && torque >= seizeAt) {
       seized = true
       onEvent(LockEvent.TensionBite(heavy = true))
-    } else if (seized && torque < T_HEAVY_OFF) {
+    } else if (seized && torque < seizeOffAt) {
       seized = false
     }
     refreshPlug()
@@ -459,7 +485,7 @@ class LockMechanics(
   private fun spoolGate(): Float = ((torque - T_EASED) / (T_SPOOL_BLOCK - T_EASED)).coerceIn(0f, 1f)
 
   /** Where the torque sits between just binding (0) and seized (1). */
-  private fun load(): Float = if (engaged) ((torque - T_BIND) / (T_HEAVY - T_BIND)).coerceIn(0f, 1f) else 0f
+  private fun load(): Float = if (engaged) ((torque - T_BIND) / (seizeAt - T_BIND)).coerceIn(0f, 1f) else 0f
 
   /**
    * The lowest a driver can sit: on its key pin, on the plug's ledge once set, or — for a
@@ -495,7 +521,7 @@ class LockMechanics(
     /** At or above this the pick cannot turn the plug back at all. */
     const val T_SPOOL_BLOCK = 0.40f
 
-    /** At or above this the binding pin is seized, until the torque falls to [T_HEAVY_OFF]. */
+    /** By default, at or above this the binding pin is seized, until the torque falls to [T_HEAVY_OFF]. */
     const val T_HEAVY = 0.75f
     const val T_HEAVY_OFF = 0.70f
 

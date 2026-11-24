@@ -21,6 +21,10 @@ data class TouchRect(val left: Float, val top: Float, val right: Float, val bott
  * the camera owns the gesture and the bench ignores it, so the camera never sees one thumb of
  * a two-thumb pick as half of a pinch.
  *
+ * A camera gesture that turns out to be one finger down and up again without moving is a tap
+ * on the scene, reported to [onSceneTap]. While [cameraLocked] the camera's gestures are
+ * swallowed, so nothing orbits, but a tap still gets through.
+ *
  * The pick pad works like a trackpad. Travel across it slides the pick along the keyway from
  * wherever it already was, and travel up it lifts the tip from wherever the thumb landed, so
  * the thumb can come off and go back on without losing its place.
@@ -53,6 +57,12 @@ class BenchTouchRouter(
   /** Panels drawn over the 3D view that take their own touches. */
   var blocked: List<TouchRect> = emptyList()
 
+  /** Holds the camera still: gestures that would orbit or zoom it are swallowed. */
+  var cameraLocked = false
+
+  /** Hears a tap on the scene outside the thumb zones, in the 3D view's pixels. */
+  var onSceneTap: ((x: Float, y: Float) -> Unit)? = null
+
   private enum class Owner { None, Bench, Camera }
 
   private var owner = Owner.None
@@ -73,13 +83,25 @@ class BenchTouchRouter(
   private var pickFloorY = 0f
   private var dragging = false
 
+  /** The finger that may yet turn out to be a tap on the scene, or [NONE]. */
+  private var tapPointer = NONE
+  private var tapX = 0f
+  private var tapY = 0f
+
   /** True while the gesture in progress belongs to the bench and not the camera. */
   val ownsGesture: Boolean get() = owner == Owner.Bench
+
+  /** True while the gesture in progress must not reach the orbit camera. */
+  val consumesGesture: Boolean get() = owner == Owner.Bench || (owner == Owner.Camera && cameraLocked)
 
   /** A finger went down. Returns true if the gesture belongs to the bench. */
   fun onDown(id: Int, x: Float, y: Float): Boolean {
     down += id
-    if (owner == Owner.Camera) return false
+    if (owner == Owner.Camera) {
+      // A second finger: a pinch or a two-finger drag, not a tap.
+      tapPointer = NONE
+      return cameraLocked
+    }
     val first = owner == Owner.None
     when {
       blocked.any { it.contains(x, y) } -> Unit
@@ -100,12 +122,24 @@ class BenchTouchRouter(
         dragging = false
       }
     }
-    if (first && owner == Owner.None) owner = Owner.Camera
+    if (first && owner == Owner.None) {
+      owner = Owner.Camera
+      if (blocked.none { it.contains(x, y) }) {
+        tapPointer = id
+        tapX = x
+        tapY = y
+      }
+      return cameraLocked
+    }
     return owner == Owner.Bench
   }
 
   /** A finger moved. Returns true if the gesture belongs to the bench. */
   fun onMove(id: Int, x: Float, y: Float): Boolean {
+    if (owner == Owner.Camera) {
+      if (id == tapPointer && (abs(x - tapX) > touchSlop || abs(y - tapY) > touchSlop)) tapPointer = NONE
+      return cameraLocked
+    }
     if (owner != Owner.Bench) return false
     if (id == wrenchPointer) {
       val amount = WrenchThrow.torqueAt((y - wrenchDownY) / wrenchThrowPx)
@@ -133,6 +167,11 @@ class BenchTouchRouter(
   /** A finger came up. Returns true if the gesture belonged to the bench. */
   fun onUp(id: Int): Boolean {
     val ours = owner == Owner.Bench
+    val camera = owner == Owner.Camera
+    if (camera && id == tapPointer) {
+      tapPointer = NONE
+      onSceneTap?.invoke(tapX, tapY)
+    }
     if (id == wrenchPointer) {
       wrenchPointer = NONE
       wrench.onWrenchReleased()
@@ -146,12 +185,13 @@ class BenchTouchRouter(
     }
     down -= id
     if (down.isEmpty()) owner = Owner.None
-    return ours
+    return ours || (camera && cameraLocked)
   }
 
   /** The system took the gesture away: let go of everything. Returns true if it was the bench's. */
   fun onCancel(): Boolean {
-    val ours = owner == Owner.Bench
+    val ours = owner == Owner.Bench || (owner == Owner.Camera && cameraLocked)
+    tapPointer = NONE
     letGo()
     down.clear()
     owner = Owner.None

@@ -25,7 +25,7 @@ Hold the phone in landscape, in two hands, the way you would hold a lock and a p
 4. The pin that stops the plug binds. Set it and the plug creeps round, moving the bind to the next one. A binding pin drags more the harder you pull, and seizes if you pull too hard.
 5. Pins 2 and 3 are spools. Once the standard pins are set the plug drops into a **false set**: it turns much further than a set is worth and hangs on a spool's waist. Keep the pick on that spool and ease the wrench until the plug turns back (counter-rotation) and the pin sets.
 6. Lift a pin too far past its set and it oversets and jams. Ease the wrench and it slips back without losing the others.
-7. Set all four and the shackle releases. Open the **BENCH** drawer and tap **RESET** to relock.
+7. Set all four and the shackle releases. Tap the shackle to relock it, or open the **BENCH** drawer and tap **RESET**.
 
 ### Picking by feel
 
@@ -45,6 +45,20 @@ The lock is meant to be read through the vibration as much as the screen:
 Sliding the pick down the keyway and noting which bump pushes back is how you find the binding pin with **HINTS** off.
 
 The **WRENCH** zone shows the torque against the marks where a spool can pass, where it is stuck and where pins seize, and a needle for how far the plug has turned. The **PICK** pad shows each stack against the shear line, with the pick underneath.
+
+## Blind game
+
+The **PLAY** row in the **BENCH** drawer starts a blind round. The camera holds on the keyway from the lock's solid side, the pick pad shows only the keyway and the chamber mouths, and hints, ghost, exploded view and the stats are off. Each lock binds in a freshly shuffled order, so you can't learn the answer, only how to feel for it.
+
+The clock starts on your first pull of the wrench and stops when the shackle releases. Then the camera swings round to the cutaway so you can see what you felt. Mistakes are drops (letting go with pins set), oversets and seizes. Three stars means a clean pick under par; best times are kept per tier.
+
+| Tier | What you still get |
+| --- | --- |
+| **APPRENTICE** | Set count, and the wrench's marked zones and band. Par 45 s. |
+| **JOURNEYMAN** | The wrench's zones, but no set count. Par 60 s. |
+| **MASTER** | A bare wrench slot, no set count, and pins that seize at a lighter pull. Par 75 s. |
+
+The plug dial's needle stays on every tier, because a real picker feels the plug creep. Its per-set ticks go with the set count. Tap the shackle (or **NEXT LOCK**) to deal the next lock, or **GIVE UP** to go back to the open bench.
 
 ## Views
 

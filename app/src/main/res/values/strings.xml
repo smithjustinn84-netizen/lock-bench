@@ -29,6 +29,27 @@
     <string name="percent">%1$d%%</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
+    <string name="control_play">PLAY</string>
+    <string name="control_give_up">GIVE UP</string>
+
+    <!-- Blind game -->
+    <string name="tier_apprentice">APPRENTICE</string>
+    <string name="tier_journeyman">JOURNEYMAN</string>
+    <string name="tier_master">MASTER</string>
+    <string name="game_title">BLIND · %1$s · LOCK %2$d</string>
+    <string name="game_sets">%1$d/%2$d set</string>
+    <string name="game_mistakes">%1$d mistakes</string>
+    <string name="game_best">best %1$s</string>
+    <string name="game_opened">OPEN</string>
+    <string name="game_time">Time %1$s</string>
+    <string name="game_time_best">Time %1$s · new best</string>
+    <string name="game_previous_best">Previous best %1$s</string>
+    <string name="game_clean">Clean pick: no drops, oversets or seizes.</string>
+    <string name="game_breakdown">%1$d dropped · %2$d overset · %3$d seized</string>
+    <string name="game_par">Three stars: clean and under %1$d s.</string>
+    <string name="game_next">NEXT LOCK</string>
+    <string name="game_quit">QUIT</string>
+    <string name="game_tap_shackle">Or tap the shackle for the next lock.</string>
 
     <!-- Tension wrench -->
     <string name="wrench_title">WRENCH</string>

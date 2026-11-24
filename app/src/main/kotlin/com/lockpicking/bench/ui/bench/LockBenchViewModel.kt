@@ -2,10 +2,15 @@ package com.lockpicking.bench.ui.bench
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.domain.bench.BenchSimulation
 import com.lockpicking.bench.domain.bench.BenchSnapshot
+import com.lockpicking.bench.domain.game.GameClock
+import com.lockpicking.bench.domain.game.GameRound
+import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.LockEvent
+import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.FrameClock
@@ -27,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * Owns the bench's state for the life of the screen, rotation included.
@@ -34,9 +40,14 @@ import kotlinx.coroutines.launch
  * The 3D scene lives and dies with the composition, so it never reaches in here. It reports
  * the lock's [LockGeometry] once the model binds ([onModelBound]), then drives [runFrameLoop]
  * with the display's frame clock and poses itself from what each frame hands back.
+ *
+ * It also runs the blind game: a [GameRound] deals a lock with a shuffled binding order,
+ * scores what the lock reports, and times the round on [clock].
  */
 class LockBenchViewModel(
   private val assets: LockAssetRepository,
+  private val records: GameRecords,
+  private val clock: GameClock,
 ) : ViewModel(), PickInput, WrenchInput, BenchSceneHost {
 
   private val _uiState = MutableStateFlow(BenchUiState())
@@ -64,6 +75,11 @@ class LockBenchViewModel(
   private val wake = Channel<Unit>(Channel.CONFLATED)
   private var simulation: BenchSimulation? = null
   private var lastSnapshot: BenchSnapshot? = null
+  private var round: GameRound? = null
+  private val random = Random.Default
+
+  /** Whether the hints were on before a game turned them off, to give them back after. */
+  private var sandboxHints = true
 
   /** Live pin travel, or null until the model has bound. */
   val readout: LockReadout? get() = simulation?.readout
@@ -97,6 +113,7 @@ class LockBenchViewModel(
       simulation = BenchSimulation(geometry, ::emit).apply {
         setExplode(state.explode)
         setGhost(state.ghost)
+        round?.let { deal(it.bindingOrder, it.tier.seizeAt) }
       }
       lastSnapshot = null
     }
@@ -159,23 +176,36 @@ class LockBenchViewModel(
   }
 
   /** The beginner's shortcut: the pick goes to [pin], lifts it exactly to the shear line, and lets go. */
-  fun onPinTapped(pin: Int) = act { nudge(pin) }
+  fun onPinTapped(pin: Int) {
+    // Blind, there is no tapping a pin up to the shear line: that would give the lock away.
+    if (_uiState.value.game != null) return
+    act { nudge(pin) }
+  }
 
   // ── Wrench input ────────────────────────────────────────────────────────────────────────────
 
-  override fun onWrenchPulled(amount: Float) = act { pullWrench(amount) }
+  override fun onWrenchPulled(amount: Float) {
+    val sim = simulation ?: return
+    // The clock starts with the first pull on a lock that is ready to be picked.
+    if (!sim.isOpen) round?.start(clock.nowMillis())
+    act { pullWrench(amount) }
+  }
 
   override fun onWrenchReleased() = act { releaseWrench() }
 
   // ── Controls ────────────────────────────────────────────────────────────────────────────────
 
-  fun onHintsToggled() = _uiState.update { it.copy(hints = !it.hints) }
+  fun onHintsToggled() {
+    if (picking()) return
+    _uiState.update { it.copy(hints = !it.hints) }
+  }
 
   fun onHandsSwapped() = _uiState.update { it.copy(swapHands = !it.swapHands) }
 
   fun onReset() = act { reset() }
 
   fun onExplodeChanged(amount: Float) {
+    if (picking()) return
     val clamped = amount.coerceIn(0f, 1f)
     _uiState.update { it.copy(explode = clamped) }
     act { setExplode(clamped) }
@@ -184,13 +214,110 @@ class LockBenchViewModel(
   fun onExplodedToggled() = onExplodeChanged(if (_uiState.value.exploded) 0f else 1f)
 
   fun onGhostToggled() {
+    if (picking()) return
     val ghost = !_uiState.value.ghost
     _uiState.update { it.copy(ghost = ghost) }
     act { setGhost(ghost) }
   }
 
   fun onPresetSelected(preset: CameraPreset) {
+    if (picking()) return
     _uiState.update { it.copy(preset = preset, presetResetKey = it.presetResetKey + 1) }
+  }
+
+  /**
+   * A tap on the shackle. On an open lock it closes it, the same as RESET; after a game round
+   * it deals the next lock. Returns true if the tap did something.
+   */
+  override fun onShackleTapped(): Boolean {
+    val state = _uiState.value
+    if (!state.opened) return false
+    if (state.game != null) onNextLock() else onReset()
+    return true
+  }
+
+  // ── Game ────────────────────────────────────────────────────────────────────────────────────
+
+  /** Deal the first blind lock of [tier]. Needs the model bound. */
+  fun onGameStarted(tier: GameTier) {
+    if (simulation == null) return
+    if (_uiState.value.game == null) sandboxHints = _uiState.value.hints
+    round = null
+    dealRound(tier, lockNumber = 1)
+  }
+
+  /** Relock and deal another lock of the same tier. */
+  fun onNextLock() {
+    val game = _uiState.value.game ?: return
+    dealRound(game.tier, game.lockNumber + 1)
+  }
+
+  /** Give up the round and go back to the open bench with its usual lock. */
+  fun onGameQuit() {
+    if (_uiState.value.game == null) return
+    round = null
+    simulation?.deal(LockMechanics.DEFAULT_BINDING_ORDER)
+    _uiState.update {
+      it.copy(game = null, hints = sandboxHints, preset = CameraPreset.ShearSide, presetResetKey = it.presetResetKey + 1)
+    }
+    publish()
+    wake()
+  }
+
+  /** The app went behind another: stop the clock. */
+  fun onPaused() {
+    round?.pause(clock.nowMillis())
+  }
+
+  fun onResumed() {
+    round?.resume(clock.nowMillis())
+  }
+
+  /** Time on the round's clock, for a timer that polls it. Zero outside a game. */
+  fun gameElapsedMillis(): Long = round?.elapsed(clock.nowMillis()) ?: 0L
+
+  /** True while a blind round is being picked: the bench's see-through aids are off limits. */
+  private fun picking(): Boolean = _uiState.value.game?.let { it.result == null } == true
+
+  private fun dealRound(tier: GameTier, lockNumber: Int) {
+    val sim = simulation ?: return
+    val next = GameRound(tier, sim.geometry.pinCount, random, previousOrder = round?.bindingOrder)
+    round = next
+    sim.setExplode(0f)
+    sim.setGhost(false)
+    sim.deal(next.bindingOrder, tier.seizeAt)
+    _uiState.update {
+      it.copy(
+        game = GameUiState(tier = tier, lockNumber = lockNumber, bestMillis = records.bestMillis(tier)),
+        hints = false,
+        ghost = false,
+        explode = 0f,
+        // The keyway from the solid side: the cut half of the housing is never in view.
+        preset = CameraPreset.Blind,
+        presetResetKey = it.presetResetKey + 1,
+      )
+    }
+    publish()
+    wake()
+  }
+
+  private fun scoreEvent(event: LockEvent) {
+    val current = round ?: return
+    val before = current.mistakes
+    if (current.onEvent(event, clock.nowMillis())) {
+      val result = current.result(records.bestMillis(current.tier))
+      if (result.newBest) records.saveBest(current.tier, result.timeMillis)
+      _uiState.update {
+        it.copy(
+          game = it.game?.copy(result = result, mistakes = result.mistakes, bestMillis = records.bestMillis(current.tier)),
+          // The reveal: round to the cut side, to see what you felt.
+          preset = CameraPreset.ShearSide,
+          presetResetKey = it.presetResetKey + 1,
+        )
+      }
+    } else if (current.mistakes != before) {
+      _uiState.update { it.copy(game = it.game?.copy(mistakes = current.mistakes)) }
+    }
   }
 
   // ── Internals ───────────────────────────────────────────────────────────────────────────────
@@ -204,6 +331,7 @@ class LockBenchViewModel(
   }
 
   private fun emit(event: LockEvent) {
+    scoreEvent(event)
     val feedback = LockFeedback(event, simulation?.pose?.torque ?: 0f)
     val texture = event is LockEvent.Grit || event is LockEvent.SpringTick || event === LockEvent.WardScrape
     if (texture) _textures.tryEmit(feedback) else _events.trySend(feedback)

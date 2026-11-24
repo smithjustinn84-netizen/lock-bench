@@ -12,11 +12,12 @@ internal val CameraPreset.eye: Position
     CameraPreset.Isometric -> Position(1.06f, 0.59f, 0.69f)
     CameraPreset.KeywayFront -> Position(0f, 0.13f, 1.36f)
     CameraPreset.ShearSide -> Position(1.04f, 0.11f, 0f)
+    CameraPreset.Blind -> Position(-0.62f, 0.30f, 1.18f)
   }
 
 /** The point the camera orbits and looks at, in model units. */
 internal val CameraPreset.target: Position
   get() = when (this) {
-    CameraPreset.Isometric, CameraPreset.KeywayFront -> Position(0f, 0.17f, 0f)
+    CameraPreset.Isometric, CameraPreset.KeywayFront, CameraPreset.Blind -> Position(0f, 0.17f, 0f)
     CameraPreset.ShearSide -> Position(0f, 0.11f, 0f)
   }

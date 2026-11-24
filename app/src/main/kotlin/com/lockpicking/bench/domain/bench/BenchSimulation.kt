@@ -165,6 +165,15 @@ class BenchSimulation(
     torqueTarget = 0f
   }
 
+  /**
+   * Relock and swap in a different lock: pins that bind in [bindingOrder] and seize at
+   * [seizeAt]. The housing and the pins are the same; only which one binds first changes.
+   */
+  fun deal(bindingOrder: List<Int>, seizeAt: Float = LockMechanics.T_HEAVY) {
+    reset()
+    lock.rekey(bindingOrder, seizeAt)
+  }
+
   /** Close the lock again. The shackle swings home and drops before the plug turns back. */
   fun reset() {
     nudgeScript.cancel()

@@ -69,6 +69,14 @@ fun TensionLever(
   torque: () -> Float,
   plugDegrees: () -> Float,
   modifier: Modifier = Modifier,
+  /**
+   * Whether the track is marked and the band named. Off, it is a bare slot: how hard is too
+   * hard is left to the hand. [seizeAt] is where the binding pin seizes on this lock.
+   */
+  showZones: Boolean = true,
+  seizeAt: Float = LockMechanics.T_HEAVY,
+  /** Whether the dial is ticked once per set: the needle against the ticks counts the sets. */
+  showSetTicks: Boolean = true,
 ) {
   val description = stringResource(R.string.cd_wrench)
   Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
@@ -81,11 +89,11 @@ fun TensionLever(
           .padding(top = 6.dp),
       ) {
         motionTick.value // read here so the wrench moving invalidates the draw, not the composition
-        drawTrack(torque())
-        drawDial(abs(plugDegrees()))
+        drawTrack(torque(), showZones, seizeAt)
+        drawDial(abs(plugDegrees()), showSetTicks)
       }
       Text(
-        stringResource(band.label),
+        if (showZones) stringResource(band.label) else "",
         style = BenchType.Label,
         color = band.tint,
         modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
@@ -111,7 +119,7 @@ private val TorqueBand.tint: Color
   }
 
 /** The slot the slide runs in, shaded by what the torque does there, and the slide itself. */
-private fun DrawScope.drawTrack(torque: Float) {
+private fun DrawScope.drawTrack(torque: Float, showZones: Boolean, seizeAt: Float) {
   val width = TrackWidth.toPx()
   val slide = SlideHeight.toPx()
   val top = slide / 2f
@@ -119,16 +127,20 @@ private fun DrawScope.drawTrack(torque: Float) {
   fun y(t: Float) = top + WrenchThrow.fractionAt(t) * travel
 
   drawRoundRect(BenchColors.Chamber, Offset(0f, 0f), Size(width, travel + slide), CornerRadius(4.dp.toPx()))
-  zone(y(LockMechanics.T_BIND), y(LockMechanics.T_EASED), width, BenchColors.Set.copy(alpha = 0.22f))
-  zone(y(LockMechanics.T_EASED), y(LockMechanics.T_SPOOL_BLOCK), width, BenchColors.Brass.copy(alpha = 0.14f))
-  zone(y(LockMechanics.T_HEAVY), y(1f) + slide / 2f, width, BenchColors.Fault.copy(alpha = 0.22f))
-  for (mark in floatArrayOf(LockMechanics.T_BIND, LockMechanics.T_EASED, LockMechanics.T_SPOOL_BLOCK, LockMechanics.T_HEAVY)) {
-    drawLine(BenchColors.Hairline, Offset(0f, y(mark)), Offset(width + 5.dp.toPx(), y(mark)), strokeWidth = 1.dp.toPx())
+  if (showZones) {
+    zone(y(LockMechanics.T_BIND), y(LockMechanics.T_EASED), width, BenchColors.Set.copy(alpha = 0.22f))
+    zone(y(LockMechanics.T_EASED), y(LockMechanics.T_SPOOL_BLOCK), width, BenchColors.Brass.copy(alpha = 0.14f))
+    zone(y(seizeAt), y(1f) + slide / 2f, width, BenchColors.Fault.copy(alpha = 0.22f))
+    for (mark in floatArrayOf(LockMechanics.T_BIND, LockMechanics.T_EASED, LockMechanics.T_SPOOL_BLOCK, seizeAt)) {
+      drawLine(BenchColors.Hairline, Offset(0f, y(mark)), Offset(width + 5.dp.toPx(), y(mark)), strokeWidth = 1.dp.toPx())
+    }
   }
 
   val at = y(torque)
   val color = when {
-    torque >= LockMechanics.T_HEAVY -> BenchColors.Fault
+    // A bare slot says nothing about where the torque sits.
+    !showZones -> BenchColors.Nickel
+    torque >= seizeAt -> BenchColors.Fault
     torque < LockMechanics.T_BIND -> BenchColors.Nickel
     torque <= LockMechanics.T_EASED -> BenchColors.Set
     else -> BenchColors.Brass
@@ -143,7 +155,7 @@ private fun DrawScope.zone(from: Float, to: Float, width: Float, color: Color) {
 }
 
 /** The plug as a needle: straight up at rest, round to the right as the plug turns. */
-private fun DrawScope.drawDial(plugDegrees: Float) {
+private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean) {
   val radius = 34.dp.toPx()
   val pivot = Offset(TrackWidth.toPx() + 14.dp.toPx(), radius + 6.dp.toPx())
   fun at(degrees: Float, r: Float): Offset {
@@ -161,7 +173,7 @@ private fun DrawScope.drawDial(plugDegrees: Float) {
     style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round),
   )
   // One tick per set; anything the needle shows beyond the last of them is not a real set.
-  var tick = 0f
+  var tick = if (showTicks) 0f else Float.MAX_VALUE
   while (tick <= DIAL_FULL_DEGREES) {
     drawLine(BenchColors.Dim, at(tick, radius - 5.dp.toPx()), at(tick, radius), strokeWidth = 1.dp.toPx())
     tick += LockMechanics.SET_DEGREES

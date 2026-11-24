@@ -69,6 +69,10 @@ fun PickPad(
   pickZ: () -> Float,
   pickY: () -> Float,
   modifier: Modifier = Modifier,
+  /** Picking blind: draw the keyway, the chambers and the pick, and nothing of the pins in them. */
+  blind: Boolean = false,
+  /** Whether the header counts sets. */
+  showSetCount: Boolean = true,
 ) {
   val pulse = remember { Animatable(0f) }
   // Flash only on a pulse that arrives while shown: the count survives rotation, and a rebuilt
@@ -88,21 +92,27 @@ fun PickPad(
     Column(Modifier.padding(horizontal = PickPadInset, vertical = 8.dp)) {
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(stringResource(R.string.pick_title), style = BenchType.Label, color = BenchColors.Dim)
-        Text(
-          stringResource(R.string.shear_line_count, setCount, count),
-          style = BenchType.Label,
-          color = if (opened) BenchColors.Set else BenchColors.Brass,
-        )
+        if (showSetCount) {
+          Text(
+            stringResource(R.string.shear_line_count, setCount, count),
+            style = BenchType.Label,
+            color = if (opened) BenchColors.Set else BenchColors.Brass,
+          )
+        }
       }
       Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
         motionTick.value // read here so pin and pick motion invalidates the draw, not the composition
         val scale = StackScale(geometry, size.height - 14.dp.toPx())
         drawLands(geometry, scale)
-        for (i in 0 until count) {
-          val cx = size.width * keyway.depthOf(i)
-          drawPinStack(i, cx, geometry, pins, scale, isBinding = i == bindingPin, isSelected = i == selectedPin)
+        if (blind) {
+          for (i in 0 until count) drawBlindChamber(size.width * keyway.depthOf(i), geometry, scale, isSelected = i == selectedPin)
+        } else {
+          for (i in 0 until count) {
+            val cx = size.width * keyway.depthOf(i)
+            drawPinStack(i, cx, geometry, pins, scale, isBinding = i == bindingPin, isSelected = i == selectedPin)
+          }
+          drawShearLine(scale.y(geometry.shearY), opened, pulse.value)
         }
-        drawShearLine(scale.y(geometry.shearY), opened, pulse.value)
         val z = pickZ()
         if (keyway.contains(z)) drawPick(size.width * keyway.depthAt(z), scale.y(pickY()), scale)
       }
@@ -141,6 +151,22 @@ private class StackScale(geometry: LockGeometry, private val drawable: Float) {
   val unit = drawable / (top - bottom)
 
   fun y(model: Float) = drawable * (1f - (model - bottom) / (top - bottom))
+}
+
+/**
+ * Where a chamber opens into the keyway, and nothing more: the mouth of its bore above the
+ * lands, and a mark under it, ringed while the tip is under it. The tip feels that much.
+ */
+private fun DrawScope.drawBlindChamber(cx: Float, geometry: LockGeometry, scale: StackScale, isSelected: Boolean) {
+  val pinWidth = 0.032f * scale.unit
+  val mouth = scale.y(geometry.pinRestY + Keyway.LAND_CLEARANCE)
+  val top = scale.y(geometry.shearY)
+  drawRect(BenchColors.Ink, Offset(cx - pinWidth / 2f, top), Size(pinWidth, mouth - top))
+  val markerY = size.height - 7.dp.toPx()
+  drawCircle(BenchColors.Hairline, radius = 3.dp.toPx(), center = Offset(cx, markerY))
+  if (isSelected) {
+    drawCircle(BenchColors.Text, radius = 6.5.dp.toPx(), center = Offset(cx, markerY), style = Stroke(1.dp.toPx()))
+  }
 }
 
 private fun DrawScope.drawPinStack(

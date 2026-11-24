@@ -40,6 +40,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lockpicking.bench.R
+import com.lockpicking.bench.domain.game.GameTier
+import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
 import com.lockpicking.bench.ui.bench.feedback.LockHaptics
@@ -51,8 +53,10 @@ import com.lockpicking.bench.ui.bench.input.TouchRect
 import com.lockpicking.bench.ui.bench.scene.BenchScene
 import com.lockpicking.bench.ui.components.BenchButton
 import com.lockpicking.bench.ui.components.ControlBar
+import com.lockpicking.bench.ui.components.GameStatusBlock
 import com.lockpicking.bench.ui.components.PickPad
 import com.lockpicking.bench.ui.components.PickPadInset
+import com.lockpicking.bench.ui.components.ResultsCard
 import com.lockpicking.bench.ui.components.StatusBlock
 import com.lockpicking.bench.ui.components.TensionLever
 import com.lockpicking.bench.ui.components.Vignette
@@ -72,6 +76,7 @@ private val TensionZoneWidth = 132.dp
 private val PickPadWidth = 264.dp
 private val HudMargin = 12.dp
 private val DrawerWidth = 400.dp
+private val ResultsWidth = 280.dp
 
 /** The parts of the HUD the touch router has to know the whereabouts of. */
 enum class HudPart {
@@ -86,6 +91,9 @@ enum class HudPart {
 
   /** The drawer, which takes its own touches even where it lies over a thumb zone. */
   Controls,
+
+  /** The results card after a blind round, which takes its own touches. */
+  Results,
 }
 
 /**
@@ -104,7 +112,7 @@ private class TouchLayout(private val router: BenchTouchRouter) {
     }
     router.wrenchBounds = local(HudPart.Wrench) ?: TouchRect.Empty
     router.pickBounds = local(HudPart.Pick) ?: TouchRect.Empty
-    router.blocked = listOfNotNull(local(HudPart.Controls))
+    router.blocked = listOfNotNull(local(HudPart.Controls), local(HudPart.Results))
   }
 }
 
@@ -140,8 +148,14 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
     touch.router.depthRangePx = (PickPadWidth - PickPadInset * 2).toPx()
     touch.router.wrenchThrowPx = WrenchThrowLength.toPx()
   }
-  // Behind another app there is no hand on the wrench.
-  LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { touch.router.onCancel() }
+  // Behind another app there is no hand on the wrench, and the round's clock stops.
+  LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+    touch.router.onCancel()
+    viewModel.onPaused()
+  }
+  LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
+  // Picking blind, the camera stays on the keyway: orbiting would show the cut side.
+  touch.router.cameraLocked = state.blind
   val meter = remember { FrameMeter() }
 
   LockBenchScreen(
@@ -168,6 +182,19 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       viewModel.onHandsSwapped()
     },
     onPreset = viewModel::onPresetSelected,
+    onPlay = { tier ->
+      touch.router.letGo()
+      viewModel.onGameStarted(tier)
+    },
+    onQuit = {
+      touch.router.letGo()
+      viewModel.onGameQuit()
+    },
+    onNextLock = {
+      touch.router.letGo()
+      viewModel.onNextLock()
+    },
+    gameElapsedMillis = viewModel::gameElapsedMillis,
     onPlaced = layout::place,
   ) { contentPadding ->
     BenchScene(
@@ -208,6 +235,10 @@ fun LockBenchScreen(
   onReset: () -> Unit,
   onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
+  onPlay: (GameTier) -> Unit,
+  onQuit: () -> Unit,
+  onNextLock: () -> Unit,
+  gameElapsedMillis: () -> Long,
   modifier: Modifier = Modifier,
   onPlaced: (HudPart, Rect) -> Unit = { _, _ -> },
   scene: @Composable (contentPadding: PaddingValues) -> Unit,
@@ -236,8 +267,14 @@ fun LockBenchScreen(
         .padding(horizontal = HudMargin, vertical = 8.dp),
     ) {
       Row(Modifier.fillMaxWidth().align(Alignment.TopStart), verticalAlignment = Alignment.Top) {
-        StatusBlock(state.status(), Modifier.weight(1f).padding(end = 12.dp))
-        LiveStatsPill(state.modelInfo, meter, telemetry)
+        val game = state.game
+        if (game != null) {
+          GameStatusBlock(game, state.setCount, state.pinCount, gameElapsedMillis, Modifier.weight(1f).padding(end = 12.dp))
+        } else {
+          StatusBlock(state.status(), Modifier.weight(1f).padding(end = 12.dp))
+          // Pin lift in millimetres and the plug's angle: not for a blind round.
+          LiveStatsPill(state.modelInfo, meter, telemetry)
+        }
         Row(Modifier.padding(start = 8.dp).width(84.dp)) {
           BenchButton(stringResource(R.string.control_menu), selected = drawerOpen) { drawerOpen = !drawerOpen }
         }
@@ -258,6 +295,9 @@ fun LockBenchScreen(
           motionTick = motionTick,
           torque = torque,
           plugDegrees = plugDegrees,
+          showZones = state.game?.tier?.showWrenchZones ?: true,
+          seizeAt = state.game?.tier?.seizeAt ?: LockMechanics.T_HEAVY,
+          showSetTicks = state.game?.tier?.showSetCount ?: true,
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomStart else Alignment.BottomEnd)
             .width(TensionZoneWidth)
@@ -275,12 +315,27 @@ fun LockBenchScreen(
           selectedPin = state.selectedPin,
           pickZ = pickZ,
           pickY = pickY,
+          blind = state.blind,
+          showSetCount = state.game?.tier?.showSetCount ?: true,
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomEnd else Alignment.BottomStart)
             .width(PickPadWidth)
             .onGloballyPositioned { onPlaced(HudPart.Pick, it.boundsInWindow()) },
         )
       }
+      val result = state.game?.result
+      if (result != null) {
+        ResultsCard(
+          result = result,
+          onNext = onNextLock,
+          onQuit = onQuit,
+          modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .width(ResultsWidth)
+            .onGloballyPositioned { onPlaced(HudPart.Results, it.boundsInWindow()) },
+        )
+      }
+      DisposableEffect(result != null) { onDispose { onPlaced(HudPart.Results, Rect.Zero) } }
       if (drawerOpen) {
         ControlBar(
           explode = state.explode,
@@ -289,6 +344,8 @@ fun LockBenchScreen(
           ghost = state.ghost,
           swapHands = state.swapHands,
           preset = state.preset,
+          gameTier = state.game?.tier,
+          blind = state.blind,
           onExplodeChange = onExplodeChange,
           onExplodedToggle = onExplodedToggle,
           onHintsToggle = onHintsToggle,
@@ -296,6 +353,14 @@ fun LockBenchScreen(
           onReset = onReset,
           onSwapHands = onSwapHands,
           onPreset = onPreset,
+          onPlay = {
+            drawerOpen = false
+            onPlay(it)
+          },
+          onQuit = {
+            drawerOpen = false
+            onQuit()
+          },
           modifier = Modifier
             .align(Alignment.TopEnd)
             .padding(top = 56.dp)

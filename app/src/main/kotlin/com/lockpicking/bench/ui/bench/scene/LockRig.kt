@@ -7,6 +7,8 @@ import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinSpec
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.RigPose
+import com.lockpicking.bench.ui.bench.input.WorldBox
+import dev.romainguy.kotlin.math.Float4
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Scale
@@ -187,6 +189,28 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     }
 
     return applyBodyAlpha(pose.bodyAlpha)
+  }
+
+  /**
+   * The part of the shackle a finger can reach, as a box in world space: the bow above the
+   * housing, wherever it has lifted and swung to. Its legs run down inside the housing, and a
+   * tap on the housing is not a tap on the shackle. Null if the nodes carry no bounds.
+   */
+  fun shackleTapBox(): WorldBox? {
+    val shackleBox = worldBounds(shackle.node) ?: return null
+    val housingTop = worldBounds(body.node)?.max?.get(1) ?: return shackleBox
+    return shackleBox.above(housingTop)
+  }
+
+  private fun worldBounds(node: Node): WorldBox? {
+    val box = (node as? RenderableNode)?.axisAlignedBoundingBox ?: return null
+    val c = box.center
+    val h = box.halfExtent
+    val world = node.worldTransform
+    val local = WorldBox(floatArrayOf(c[0] - h[0], c[1] - h[1], c[2] - h[2]), floatArrayOf(c[0] + h[0], c[1] + h[1], c[2] + h[2]))
+    return WorldBox.around(
+      local.corners().map { (world * Float4(it[0], it[1], it[2], 1f)).let { p -> floatArrayOf(p.x, p.y, p.z) } },
+    )
   }
 
   private fun applyBodyAlpha(alpha: Float): Boolean {

@@ -1,6 +1,8 @@
 package com.lockpicking.bench.ui.bench
 
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.game.GameResult
+import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
 
@@ -37,9 +39,14 @@ data class BenchUiState(
   val preset: CameraPreset = CameraPreset.ShearSide,
   /** Bumped on every preset tap, so re-tapping the current one snaps an orbited camera back. */
   val presetResetKey: Int = 0,
+  /** The blind game in progress, or null on the open bench. */
+  val game: GameUiState? = null,
 ) {
   val pinCount: Int get() = geometry?.pinCount ?: LockGeometry.PIN_COUNT
   val exploded: Boolean get() = explode > EXPLODED_AT
+
+  /** True while a blind round is being picked: the camera is held on the keyway and the pins are hidden. */
+  val blind: Boolean get() = game != null && game.result == null
 
   /** True while the wrench is holding the plug against the pins. */
   val tension: Boolean get() = band != TorqueBand.Slack
@@ -48,6 +55,18 @@ data class BenchUiState(
     const val EXPLODED_AT = 0.5f
   }
 }
+
+/** A blind round, as the HUD shows it. The clock is polled, not held here. */
+data class GameUiState(
+  val tier: GameTier,
+  /** Which lock of the run this is, counting from 1. */
+  val lockNumber: Int,
+  /** The tier's best time before this round, or null. */
+  val bestMillis: Long?,
+  val mistakes: Int = 0,
+  /** Set once the lock opens. */
+  val result: GameResult? = null,
+)
 
 /** The one-line headline the status block shows. Pin numbers here are 1-based, as labelled. */
 sealed interface BenchStatus {

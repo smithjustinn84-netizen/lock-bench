@@ -17,11 +17,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
+import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 
-/** The bench drawer: explode slider, the bench toggles, the camera presets, and which hand does what. */
+/**
+ * The bench drawer: explode slider, the bench toggles, the camera presets, which hand does
+ * what, and the blind game. While a blind lock is being picked ([blind]) everything that would
+ * let you see into it is switched off, and RESET gives the round up.
+ */
 @Composable
 fun ControlBar(
   explode: Float,
@@ -30,6 +35,8 @@ fun ControlBar(
   ghost: Boolean,
   swapHands: Boolean,
   preset: CameraPreset,
+  gameTier: GameTier?,
+  blind: Boolean,
   onExplodeChange: (Float) -> Unit,
   onExplodedToggle: () -> Unit,
   onHintsToggle: () -> Unit,
@@ -37,35 +44,48 @@ fun ControlBar(
   onReset: () -> Unit,
   onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
+  onPlay: (GameTier) -> Unit,
+  onQuit: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   Panel(modifier) {
     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      ExplodeSlider(explode, onExplodeChange)
+      ExplodeSlider(explode, enabled = !blind, onExplodeChange)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BenchToggle(stringResource(R.string.control_hints), hints, onClick = onHintsToggle)
-        BenchToggle(stringResource(R.string.control_ghost), ghost, onClick = onGhostToggle)
-        BenchToggle(stringResource(R.string.control_exploded), exploded, onClick = onExplodedToggle)
-        BenchButton(stringResource(R.string.control_reset), onClick = onReset)
+        BenchToggle(stringResource(R.string.control_hints), hints, enabled = gameTier == null, onClick = onHintsToggle)
+        BenchToggle(stringResource(R.string.control_ghost), ghost, enabled = !blind, onClick = onGhostToggle)
+        BenchToggle(stringResource(R.string.control_exploded), exploded, enabled = !blind, onClick = onExplodedToggle)
+        if (gameTier != null) {
+          BenchButton(stringResource(R.string.control_give_up), onClick = onQuit)
+        } else {
+          BenchButton(stringResource(R.string.control_reset), onClick = onReset)
+        }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        CameraPreset.entries.forEach { option ->
-          BenchButton(stringResource(option.label), selected = option == preset) { onPreset(option) }
+        CameraPreset.entries.filter { it.inDrawer }.forEach { option ->
+          BenchButton(stringResource(option.label), selected = option == preset, enabled = !blind) { onPreset(option) }
         }
         BenchToggle(stringResource(R.string.control_swap), swapHands, onClick = onSwapHands)
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.control_play), style = BenchType.Label, color = BenchColors.Dim, modifier = Modifier.width(66.dp))
+        GameTier.entries.forEach { tier ->
+          BenchButton(stringResource(tier.label), selected = tier == gameTier) { onPlay(tier) }
+        }
       }
     }
   }
 }
 
 @Composable
-private fun ExplodeSlider(explode: Float, onExplodeChange: (Float) -> Unit) {
+private fun ExplodeSlider(explode: Float, enabled: Boolean, onExplodeChange: (Float) -> Unit) {
   val description = stringResource(R.string.cd_explode_slider)
   Row(verticalAlignment = Alignment.CenterVertically) {
     Text(stringResource(R.string.control_explode), style = BenchType.Label, color = BenchColors.Dim, modifier = Modifier.width(66.dp))
     Slider(
       value = explode,
       onValueChange = onExplodeChange,
+      enabled = enabled,
       valueRange = 0f..1f,
       modifier = Modifier
         .weight(1f)
@@ -85,3 +105,11 @@ private fun ExplodeSlider(explode: Float, onExplodeChange: (Float) -> Unit) {
     )
   }
 }
+
+/** The name a tier goes by on its button and in the HUD. */
+val GameTier.label: Int
+  get() = when (this) {
+    GameTier.Apprentice -> R.string.tier_apprentice
+    GameTier.Journeyman -> R.string.tier_journeyman
+    GameTier.Master -> R.string.tier_master
+  }

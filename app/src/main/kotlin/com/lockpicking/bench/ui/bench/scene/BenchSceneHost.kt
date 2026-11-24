@@ -14,4 +14,7 @@ interface BenchSceneHost {
 
   /** Runs the bench on [clock] until cancelled, handing each frame's pose to [onFrame]. */
   suspend fun runFrameLoop(clock: FrameClock, onFrame: (RigPose, LockReadout) -> Unit)
+
+  /** The shackle was tapped. Returns true if that did something: it only does on an open lock. */
+  fun onShackleTapped(): Boolean
 }

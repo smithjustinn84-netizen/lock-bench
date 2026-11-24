@@ -55,7 +55,7 @@ fun RowScope.BenchToggle(label: String, on: Boolean, enabled: Boolean = true, on
 
 /** A momentary button, or one of a set of exclusive choices when [selected] is used. */
 @Composable
-fun RowScope.BenchButton(label: String, selected: Boolean = false, onClick: () -> Unit) {
+fun RowScope.BenchButton(label: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
   Box(
     Modifier
       .weight(1f)
@@ -63,9 +63,18 @@ fun RowScope.BenchButton(label: String, selected: Boolean = false, onClick: () -
       .clip(BenchShapes.Control)
       .background(if (selected) BenchColors.BrassWash else Color.Transparent)
       .border(1.dp, if (selected) BenchColors.Brass else BenchColors.Hairline, BenchShapes.Control)
-      .clickable(role = Role.Button, onClick = onClick),
+      .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
     contentAlignment = Alignment.Center,
   ) {
-    Text(label, style = BenchType.Label, color = if (selected) BenchColors.Brass else BenchColors.Text, textAlign = TextAlign.Center)
+    Text(
+      label,
+      style = BenchType.Label,
+      color = when {
+        !enabled -> BenchColors.Hairline
+        selected -> BenchColors.Brass
+        else -> BenchColors.Text
+      },
+      textAlign = TextAlign.Center,
+    )
   }
 }
