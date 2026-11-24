@@ -98,12 +98,13 @@ class LockBenchViewModel(
   private var infoLoad: Job? = null
 
   init {
-    // The bench opens on the lock it was left with. Nothing loads until that is known, so the
-    // trainer never flashes up first.
+    // The bench opens as it was left: lock, camera and hints. Nothing loads until that is known,
+    // so the trainer never flashes up first.
     viewModelScope.launch {
-      val lock = prefs.lastLock() ?: LockModel.Trainer
-      _uiState.update { it.copy(lock = lock, restored = true) }
-      loadModelInfo(lock)
+      val saved = prefs.load()
+      sandboxHints = saved.hints
+      _uiState.update { it.copy(lock = saved.lock, preset = saved.preset, hints = saved.hints, restored = true) }
+      loadModelInfo(saved.lock)
     }
   }
 
@@ -146,7 +147,7 @@ class LockBenchViewModel(
         restored = true,
       )
     }
-    viewModelScope.launch { prefs.saveLastLock(lock) }
+    viewModelScope.launch { prefs.saveLock(lock) }
     loadModelInfo(lock)
   }
 
@@ -247,7 +248,10 @@ class LockBenchViewModel(
 
   fun onHintsToggled() {
     if (picking()) return
-    _uiState.update { it.copy(hints = !it.hints) }
+    val hints = !_uiState.value.hints
+    _uiState.update { it.copy(hints = hints) }
+    // After a round the hints go back to the bench's own when the game ends: only those are kept.
+    if (_uiState.value.game == null) viewModelScope.launch { prefs.saveHints(hints) }
   }
 
   fun onHandsSwapped() = _uiState.update { it.copy(swapHands = !it.swapHands) }
@@ -273,6 +277,8 @@ class LockBenchViewModel(
   fun onPresetSelected(preset: CameraPreset) {
     if (picking()) return
     _uiState.update { it.copy(preset = preset, presetResetKey = it.presetResetKey + 1) }
+    // Looking around the reveal after a round is not a choice for the open bench.
+    if (_uiState.value.game == null) viewModelScope.launch { prefs.savePreset(preset) }
   }
 
   /**

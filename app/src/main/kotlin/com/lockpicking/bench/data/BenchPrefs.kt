@@ -2,30 +2,59 @@ package com.lockpicking.bench.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lockpicking.bench.domain.model.LockModel
+import com.lockpicking.bench.ui.bench.CameraPreset
 import kotlinx.coroutines.flow.first
+
+/** How the open bench was left: what it opens on next launch. */
+data class SavedBench(
+  val lock: LockModel = LockModel.Trainer,
+  val preset: CameraPreset = CameraPreset.ShearSide,
+  val hints: Boolean = true,
+)
 
 /** Bench choices kept between launches. */
 interface BenchPrefs {
-  /** The lock last put on the bench, or null if none was ever chosen (or it has since gone). */
-  suspend fun lastLock(): LockModel?
+  /** What was saved, with the defaults for anything never saved (or no longer known). */
+  suspend fun load(): SavedBench
 
-  suspend fun saveLastLock(lock: LockModel)
+  suspend fun saveLock(lock: LockModel)
+
+  suspend fun savePreset(preset: CameraPreset)
+
+  suspend fun saveHints(hints: Boolean)
 }
 
 class DataStoreBenchPrefs(private val store: DataStore<Preferences>) : BenchPrefs {
-  override suspend fun lastLock(): LockModel? {
-    val id = store.data.first()[LAST_LOCK] ?: return null
-    return LockModel.entries.firstOrNull { it.id == id }
+  override suspend fun load(): SavedBench {
+    val prefs = store.data.first()
+    val defaults = SavedBench()
+    return SavedBench(
+      lock = prefs[LOCK]?.let { id -> LockModel.entries.firstOrNull { it.id == id } } ?: defaults.lock,
+      // Only the angles the drawer offers: the blind angle belongs to a round.
+      preset = prefs[PRESET]?.let { name -> CameraPreset.entries.firstOrNull { it.name == name && it.inDrawer } } ?: defaults.preset,
+      hints = prefs[HINTS] ?: defaults.hints,
+    )
   }
 
-  override suspend fun saveLastLock(lock: LockModel) {
-    store.edit { it[LAST_LOCK] = lock.id }
+  override suspend fun saveLock(lock: LockModel) {
+    store.edit { it[LOCK] = lock.id }
+  }
+
+  override suspend fun savePreset(preset: CameraPreset) {
+    store.edit { it[PRESET] = preset.name }
+  }
+
+  override suspend fun saveHints(hints: Boolean) {
+    store.edit { it[HINTS] = hints }
   }
 
   private companion object {
-    val LAST_LOCK = stringPreferencesKey("last_lock")
+    val LOCK = stringPreferencesKey("last_lock")
+    val PRESET = stringPreferencesKey("camera_preset")
+    val HINTS = booleanPreferencesKey("hints")
   }
 }

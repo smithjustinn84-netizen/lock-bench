@@ -3,6 +3,7 @@ package com.lockpicking.bench.ui.bench
 import com.lockpicking.bench.data.BenchPrefs
 import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
+import com.lockpicking.bench.data.SavedBench
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.domain.bench.Keyway
 import com.lockpicking.bench.domain.game.GameClock
@@ -67,10 +68,23 @@ class LockBenchViewModelTest {
 
   private val records = FakeRecords()
 
-  private class FakePrefs(var lock: LockModel? = null) : BenchPrefs {
-    override suspend fun lastLock(): LockModel? = lock
-    override suspend fun saveLastLock(lock: LockModel) {
+  private class FakePrefs : BenchPrefs {
+    var lock: LockModel? = null
+    var preset: CameraPreset? = null
+    var hints: Boolean? = null
+
+    override suspend fun load(): SavedBench {
+      val defaults = SavedBench()
+      return SavedBench(lock ?: defaults.lock, preset ?: defaults.preset, hints ?: defaults.hints)
+    }
+    override suspend fun saveLock(lock: LockModel) {
       this.lock = lock
+    }
+    override suspend fun savePreset(preset: CameraPreset) {
+      this.preset = preset
+    }
+    override suspend fun saveHints(hints: Boolean) {
+      this.hints = hints
     }
   }
 
@@ -504,6 +518,36 @@ class LockBenchViewModelTest {
     assertTrue(next.uiState.value.restored)
     assertEquals(LockModel.Master3, next.uiState.value.lock)
     assertEquals(listOf(LockModel.Master3), repository.asked)
+  }
+
+  @Test
+  fun `the camera and hints chosen on the bench are remembered for the next launch`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onPresetSelected(CameraPreset.Isometric)
+    vm.onHintsToggled()
+    advanceUntilIdle()
+    assertEquals(CameraPreset.Isometric, prefs.preset)
+    assertEquals(false, prefs.hints)
+
+    val next = viewModel()
+    assertEquals(CameraPreset.Isometric, next.uiState.value.preset)
+    assertFalse(next.uiState.value.hints)
+  }
+
+  @Test
+  fun `a blind round's camera and hints are not saved over the bench's`() = runTest(dispatcher) {
+    prefs.preset = CameraPreset.KeywayFront
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    pickOpenByHand(vm)
+    vm.onPresetSelected(CameraPreset.Isometric)
+    vm.onHintsToggled()
+    vm.onGameQuit()
+    advanceUntilIdle()
+    assertEquals(CameraPreset.KeywayFront, prefs.preset)
+    assertNull(prefs.hints)
+    // Giving up hands back the bench's own hints, which were on.
+    assertTrue(vm.uiState.value.hints)
   }
 
   @Test
