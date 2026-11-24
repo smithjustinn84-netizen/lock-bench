@@ -17,8 +17,16 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    }
+    // Release code, R8 and all, but installable: the build to profile and measure frames on.
+    create("benchmark") {
+      initWith(getByName("release"))
+      signingConfig = signingConfigs.getByName("debug")
+      matchingFallbacks += "release"
+      isDebuggable = false
     }
   }
   compileOptions {
