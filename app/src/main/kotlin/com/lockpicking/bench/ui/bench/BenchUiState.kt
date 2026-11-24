@@ -5,13 +5,16 @@ import com.lockpicking.bench.domain.game.GameResult
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
+import com.lockpicking.bench.domain.model.LockModel
 
 /**
  * Everything the bench screen shows that changes at gesture speed. Pin travel, which changes
  * every frame, is not here: it is read straight from the lock in the draw phase.
  */
 data class BenchUiState(
-  /** Mesh stats of the model file, once read. */
+  /** Which padlock is on the bench. */
+  val lock: LockModel = LockModel.Trainer,
+  /** Mesh stats of [lock]'s model file, once read. Null while a lock is being swapped in. */
   val modelInfo: GlbInfo? = null,
   /** The lock's dimensions, once the 3D model has bound. Null until then. */
   val geometry: LockGeometry? = null,
@@ -42,7 +45,7 @@ data class BenchUiState(
   /** The blind game in progress, or null on the open bench. */
   val game: GameUiState? = null,
 ) {
-  val pinCount: Int get() = geometry?.pinCount ?: LockGeometry.PIN_COUNT
+  val pinCount: Int get() = geometry?.pinCount ?: LockGeometry.DEFAULT_PIN_COUNT
   val exploded: Boolean get() = explode > EXPLODED_AT
 
   /** True while a blind round is being picked: the camera is held on the keyway and the pins are hidden. */
@@ -80,6 +83,9 @@ sealed interface BenchStatus {
   /** The pick is on a spool that cannot turn the plug back until the wrench is eased. */
   data class EaseOff(val pinNumber: Int) : BenchStatus
 
+  /** The pick is on a serrated driver whose groove has caught: it clicked, but it is not set. */
+  data class Caught(val pinNumber: Int) : BenchStatus
+
   /** The plug has dropped into a false set and is hanging on this spool. */
   data class FalseSet(val pinNumber: Int) : BenchStatus
 
@@ -94,7 +100,8 @@ fun BenchUiState.status(): BenchStatus = when {
   !hints -> BenchStatus.Picking(setCount, pinCount, null)
   oversetPin >= 0 -> BenchStatus.Overset(oversetPin + 1)
   band == TorqueBand.Heavy -> BenchStatus.Seized
-  blockedPin >= 0 -> BenchStatus.EaseOff(blockedPin + 1)
+  blockedPin >= 0 ->
+    if (geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)
   falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1)
   else -> BenchStatus.Picking(setCount, pinCount, bindingPin.takeIf { it >= 0 }?.plus(1))
 }

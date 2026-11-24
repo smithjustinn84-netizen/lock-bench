@@ -16,6 +16,9 @@ import kotlin.math.min
  * - Getting a spool out of a false set means pushing its lower flange up through the shear
  *   line, which has to turn the plug back: counter-rotation. The pick can only do that against
  *   a light torque ([T_EASED]); from there to [T_SPOOL_BLOCK] it gets part of the way.
+ * - A serrated driver has a ladder of grooves below its foot. Each one clicks as it reaches
+ *   the shear line, like a set that is not one, and above [T_SERRATION] it catches there until
+ *   the wrench is eased.
  * - Push a pin too far past its set and its key pin jams in the shear line. Easing the torque
  *   lets it slip back without losing the other sets.
  * - Above [T_HEAVY] the binding pin is seized and will not lift at all.
@@ -28,7 +31,7 @@ class LockMechanics(
   /** Length of a driver pin. A spool's waist lies between a [SPOOL_FLANGE] at each end of it. */
   val driverLength: Float = DEFAULT_DRIVER_LENGTH,
   /** Pin indices from the tightest chamber to the loosest: among equals, the first one binds. */
-  bindingOrder: List<Int> = DEFAULT_BINDING_ORDER.filter { it < pins.size },
+  bindingOrder: List<Int> = defaultBindingOrder(pins.size),
   private val onEvent: (LockEvent) -> Unit = {},
 ) : LockReadout {
   /** Pin indices from the tightest chamber to the loosest. Changed only by [rekey]. */
@@ -218,6 +221,13 @@ class LockMechanics(
       limitKind = Limit.Seized
       return keyLifts[pin]
     }
+    if (pins[pin].serrated && torque > T_SERRATION && bindingPin == pin) {
+      val catch = nextSerration(pin, driverLifts[pin])
+      if (!catch.isNaN()) {
+        limitKind = Limit.Serration
+        return catch
+      }
+    }
     if (pins[pin].spool) {
       // The lowest clearance the pick may force the plug back to on this spool's lower shoulder.
       val allowed = min(falseSetDepth, spoolGate())
@@ -281,7 +291,8 @@ class LockMechanics(
     }
 
     val limit = liftLimit(pin)
-    noteBlock(pin, wanted, limit)
+    val stop = limitKind
+    noteBlock(pin, wanted, limit, stop)
     val target = lift.coerceIn(0f, limit)
     val wasBinding = bindingPin == pin
     val before = keyLifts[pin]
@@ -289,6 +300,8 @@ class LockMechanics(
     // Go only as far as the shear line first, so the plug follows a spool all the way up its
     // shoulder before anything is decided about a set.
     moveTo(pin, min(target, shear))
+    // Every groove is below the shear line, so this stretch of the push is the one that crosses them.
+    if (wasBinding && pins[pin].serrated) reportSerrations(pin, before, keyLifts[pin])
     refreshPlug()
     if (target >= shear && bindingPin == pin) {
       // A fast drag can jump the whole set window in one event; give the first crossing to
@@ -310,6 +323,9 @@ class LockMechanics(
       return
     }
     moveTo(pin, target)
+    // A groove only holds once the pin is up on it, which may be this very push: the bench
+    // stops asking once nothing moves, so it cannot wait for the next one to say so.
+    if (stop == Limit.Serration) noteBlock(pin, wanted, limit, stop)
 
     if (keyLifts[pin] - gritMark >= (if (wasBinding) GRIT_STEP else SPRING_STEP)) {
       gritMark = keyLifts[pin]
@@ -384,9 +400,10 @@ class LockMechanics(
   }
 
   /** Remembers that the pick is pushing [pin] against a stop, and says so once per push. */
-  private fun noteBlock(pin: Int, wanted: Float, limit: Float) {
-    val kind = limitKind
-    if (wanted <= limit + BLOCK_SLOP) {
+  private fun noteBlock(pin: Int, wanted: Float, limit: Float, kind: Limit) {
+    // A serration has not caught until the pin has been pushed up onto it.
+    val against = kind != Limit.Serration || keyLifts[pin] >= limit - SNAP
+    if (wanted <= limit + BLOCK_SLOP || !against) {
       blockedPin = -1
       blockReported = false
       return
@@ -399,6 +416,7 @@ class LockMechanics(
       when (kind) {
         Limit.Seized -> LockEvent.Seized(pin)
         Limit.Spool -> LockEvent.SpoolBlocked(pin)
+        Limit.Serration -> LockEvent.SerrationHeld(pin)
         Limit.Travel -> LockEvent.HardStop(pin)
       },
     )
@@ -481,6 +499,26 @@ class LockMechanics(
     return min(lower, upper).coerceIn(0f, 1f)
   }
 
+  /** The lift at which [pin]'s groove [k] meets the shear line. Groove 1 is the one nearest the set. */
+  private fun serrationLift(pin: Int, k: Int): Float = pins[pin].liftToShear - k * SERRATION_PITCH
+
+  /** The lift of the groove [pin] will catch on next, going up from [lift]; NaN once it is past them all. */
+  private fun nextSerration(pin: Int, lift: Float): Float {
+    for (k in SERRATIONS downTo 1) {
+      val at = serrationLift(pin, k)
+      if (at > 0f && at >= lift - SNAP) return at
+    }
+    return Float.NaN
+  }
+
+  /** A click for every groove that reached the shear line as the pin went from [from] up to [to]. */
+  private fun reportSerrations(pin: Int, from: Float, to: Float) {
+    for (k in SERRATIONS downTo 1) {
+      val at = serrationLift(pin, k)
+      if (at > 0f && from < at - SNAP && to >= at - SNAP) onEvent(LockEvent.SerrationClick(pin, SERRATIONS - k + 1))
+    }
+  }
+
   /** The lowest clearance the pick can force a spool's shoulder to at this torque. */
   private fun spoolGate(): Float = ((torque - T_EASED) / (T_SPOOL_BLOCK - T_EASED)).coerceIn(0f, 1f)
 
@@ -501,11 +539,15 @@ class LockMechanics(
     return max(keyLifts[i], ledge)
   }
 
-  private enum class Limit { Travel, Seized, Spool }
+  private enum class Limit { Travel, Seized, Spool, Serration }
 
   companion object {
     /** Pins 3, 1, 4, 2 — an arbitrary but fixed tolerance stack-up. */
     val DEFAULT_BINDING_ORDER = listOf(2, 0, 3, 1)
+
+    /** The order a lock of [pinCount] stacks binds in on the open bench: [DEFAULT_BINDING_ORDER], then any further pins from the back. */
+    fun defaultBindingOrder(pinCount: Int): List<Int> =
+      DEFAULT_BINDING_ORDER.filter { it < pinCount } + (pinCount - 1 downTo DEFAULT_BINDING_ORDER.size)
 
     const val DEFAULT_DRIVER_LENGTH = 0.060f
 
@@ -520,6 +562,9 @@ class LockMechanics(
 
     /** At or above this the pick cannot turn the plug back at all. */
     const val T_SPOOL_BLOCK = 0.40f
+
+    /** Above this a serration that has reached the shear line holds there; at or below it, the pick pushes it through. */
+    const val T_SERRATION = 0.45f
 
     /** By default, at or above this the binding pin is seized, until the torque falls to [T_HEAVY_OFF]. */
     const val T_HEAVY = 0.75f
@@ -540,6 +585,10 @@ class LockMechanics(
 
     /** Height of the chamfer between a spool's flange and its waist. */
     const val SPOOL_SHOULDER = 0.0035f
+
+    /** How many grooves a serrated driver has below the set, and how far apart they are. */
+    const val SERRATIONS = 3
+    const val SERRATION_PITCH = 0.006f
 
     /** Ticks reported as the plug is turned back out of a false set. */
     const val COUNTER_ROTATION_STEPS = 4

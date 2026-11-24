@@ -16,6 +16,15 @@ sealed interface LockEvent {
   /** The pick is pushing a spool's flange against more torque than it can turn back. */
   data class SpoolBlocked(val pin: Int) : LockEvent
 
+  /**
+   * One of a serrated driver's grooves reached the shear line as [pin] was lifted. It clicks
+   * the way a set does, but the pin is not set. [notch] counts up to the last groove before it is.
+   */
+  data class SerrationClick(val pin: Int, val notch: Int) : LockEvent
+
+  /** The pick is pushing a serrated driver whose groove has caught under more torque than it can pass. */
+  data class SerrationHeld(val pin: Int) : LockEvent
+
   /** The pick is pushing a binding pin that the torque has seized. */
   data class Seized(val pin: Int) : LockEvent
 

@@ -43,6 +43,11 @@ fun StatusBlock(status: BenchStatus, modifier: Modifier = Modifier) {
       hint = stringResource(R.string.status_ease_off_hint, status.pinNumber)
       tint = BenchColors.Fault
     }
+    is BenchStatus.Caught -> {
+      headline = stringResource(R.string.status_caught)
+      hint = stringResource(R.string.status_caught_hint, status.pinNumber)
+      tint = BenchColors.Fault
+    }
     is BenchStatus.FalseSet -> {
       headline = stringResource(R.string.status_false_set)
       hint = stringResource(R.string.status_false_set_hint, status.pinNumber)

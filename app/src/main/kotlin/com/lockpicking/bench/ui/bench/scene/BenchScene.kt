@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -14,6 +15,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.data.AssetPaths
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.bench.FrameMeter
 import com.lockpicking.bench.ui.bench.input.BenchTouchHandler
@@ -46,8 +48,8 @@ private val SHACKLE_TAP_PAD = 16.dp
 private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
 
 /**
- * The 3D bench: the padlock model under a key light and the studio environment, an orbit
- * camera. Every touch on the screen arrives here, the ones on the HUD's tension zone and pick
+ * The 3D bench: [lock]'s model under a key light and the studio environment, an orbit
+ * camera. Choosing another lock swaps the model: the old rig goes and a new one binds. Every touch on the screen arrives here, the ones on the HUD's tension zone and pick
  * pad included; [touch] decides which are the bench's and which move the camera.
  *
  * Everything Filament owns lives here and dies with the composition. Once the model binds,
@@ -57,6 +59,7 @@ private val CLEAR_COLOR = doubleArrayOf(0.014, 0.016, 0.020, 1.0)
 @Composable
 fun BenchScene(
   host: BenchSceneHost,
+  lock: LockModel,
   modelInfo: GlbInfo?,
   preset: CameraPreset,
   presetResetKey: Int,
@@ -111,7 +114,8 @@ fun BenchScene(
     key = presetResetKey,
   )
 
-  var rig by remember { mutableStateOf<LockRig?>(null) }
+  // The rig is bound to one model's nodes: a new lock starts without one.
+  var rig by remember(lock) { mutableStateOf<LockRig?>(null) }
 
   // A tap on the 3D view that is not a thumb zone's: if it lands on the shackle, tell the host.
   val tapPadPx = with(LocalDensity.current) { SHACKLE_TAP_PAD.toPx() }
@@ -148,21 +152,24 @@ fun BenchScene(
     onTouchEvent = { event, _ -> touch.handle(event) },
     onFrame = { meter.onFrame() },
   ) {
-    rememberModelInstance(modelLoader, AssetPaths.MODEL)?.let { instance ->
-      val holder = remember(instance) { arrayOfNulls<ModelNode>(1) }
-      ModelNode(modelInstance = instance, autoAnimate = false, apply = { holder[0] = this })
-      modelInfo?.let { info ->
-        LaunchedEffect(instance, info) {
-          val node = holder[0] ?: return@LaunchedEffect
-          runCatching { LockRig(node, info) }
-            .onSuccess {
-              rig = it
-              host.onModelBound(it.geometry)
-            }
-            .onFailure {
-              Log.e(TAG, "could not bind the lock model", it)
-              host.onModelFailed(it.message ?: it.toString())
-            }
+    // Keyed, so nothing of one lock's model is carried over into the next one's.
+    key(lock) {
+      rememberModelInstance(modelLoader, AssetPaths.model(lock))?.let { instance ->
+        val holder = remember(instance) { arrayOfNulls<ModelNode>(1) }
+        ModelNode(modelInstance = instance, autoAnimate = false, apply = { holder[0] = this })
+        modelInfo?.let { info ->
+          LaunchedEffect(instance, info) {
+            val node = holder[0] ?: return@LaunchedEffect
+            runCatching { LockRig(node, info) }
+              .onSuccess {
+                rig = it
+                host.onModelBound(it.geometry)
+              }
+              .onFailure {
+                Log.e(TAG, "could not bind the lock model", it)
+                host.onModelFailed(it.message ?: it.toString())
+              }
+          }
         }
       }
     }

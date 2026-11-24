@@ -10,7 +10,9 @@ import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.motion.FrameClock
+import com.lockpicking.bench.testing.american1100Geometry
 import com.lockpicking.bench.testing.testGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +42,12 @@ class LockBenchViewModelTest {
   private val modelInfo = GlbInfo(triangles = 1200, primitives = 18, nodes = 20, trianglesByNode = emptyMap(), baseColors = emptyMap())
 
   private class FakeRepository(private val result: () -> GlbInfo) : LockAssetRepository {
-    override suspend fun loadModelInfo(): GlbInfo = result()
+    val asked = mutableListOf<LockModel>()
+
+    override suspend fun loadModelInfo(lock: LockModel): GlbInfo {
+      asked += lock
+      return result()
+    }
   }
 
   @Before
@@ -50,10 +57,10 @@ class LockBenchViewModelTest {
   fun tearDown() = Dispatchers.resetMain()
 
   private class FakeRecords : GameRecords {
-    val best = mutableMapOf<GameTier, Long>()
-    override fun bestMillis(tier: GameTier): Long? = best[tier]
-    override fun saveBest(tier: GameTier, millis: Long) {
-      best[tier] = millis
+    val best = mutableMapOf<Pair<LockModel, GameTier>, Long>()
+    override fun bestMillis(lock: LockModel, tier: GameTier): Long? = best[lock to tier]
+    override fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
+      best[lock to tier] = millis
     }
   }
 
@@ -62,7 +69,12 @@ class LockBenchViewModelTest {
   /** The round's clock runs on the test scheduler's virtual time. */
   private val clock = GameClock { dispatcher.scheduler.currentTime }
 
-  private fun viewModel(result: () -> GlbInfo = { modelInfo }) = LockBenchViewModel(FakeRepository(result), records, clock)
+  private var repository = FakeRepository { modelInfo }
+
+  private fun viewModel(result: () -> GlbInfo = { modelInfo }): LockBenchViewModel {
+    repository = FakeRepository(result)
+    return LockBenchViewModel(repository, records, clock)
+  }
 
   /** A 60 fps display on the test scheduler's virtual clock. */
   private fun TestScope.frameClock() = FrameClock {
@@ -383,7 +395,7 @@ class LockBenchViewModelTest {
     assertFalse("the reveal shows the pins", state.blind)
     assertEquals(CameraPreset.ShearSide, state.preset)
     assertTrue(result.newBest)
-    assertEquals(result.timeMillis, records.best[GameTier.Apprentice])
+    assertEquals(result.timeMillis, records.best[LockModel.Trainer to GameTier.Apprentice])
     assertTrue(result.stars in 1..3)
 
     // The clock is stopped once the shackle releases.
@@ -432,6 +444,82 @@ class LockBenchViewModelTest {
     // The usual lock: pin 3 is first in its order, but a spool at rest has its flange clear of
     // the shear line, so pin 1 is the one that binds.
     assertEquals(0, vm.uiState.value.bindingPin)
+  }
+
+  // ── Locks ───────────────────────────────────────────────────────────────────────────────────
+
+  @Test
+  fun `choosing another lock empties the bench until its model binds`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    advanceUntilIdle()
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    assertTrue(vm.uiState.value.tension)
+
+    vm.onLockSelected(LockModel.American1100)
+    var state = vm.uiState.value
+    assertEquals(LockModel.American1100, state.lock)
+    // Nothing of the old lock is left to draw or to pick.
+    assertNull(state.modelInfo)
+    assertNull(state.geometry)
+    assertNull(vm.readout)
+    assertFalse(state.tension)
+
+    advanceUntilIdle()
+    assertEquals(listOf(LockModel.Trainer, LockModel.American1100), repository.asked)
+    assertSame(modelInfo, vm.uiState.value.modelInfo)
+
+    vm.onModelBound(american1100Geometry)
+    state = vm.uiState.value
+    assertEquals(5, state.pinCount)
+    assertEquals(5, vm.readout!!.pinCount)
+  }
+
+  @Test
+  fun `the bench settings survive a change of lock`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onHintsToggled()
+    vm.onHandsSwapped()
+    vm.onGhostToggled()
+    vm.onLockSelected(LockModel.Master3)
+    val state = vm.uiState.value
+    assertFalse(state.hints)
+    assertTrue(state.swapHands)
+    assertTrue(state.ghost)
+  }
+
+  @Test
+  fun `a blind lock cannot be swapped for another while it is being picked`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    vm.onLockSelected(LockModel.Master3)
+    assertEquals(LockModel.Trainer, vm.uiState.value.lock)
+    assertNotNull(vm.uiState.value.game)
+  }
+
+  @Test
+  fun `changing lock after a round ends the game and gives the hints back`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    pickOpenByHand(vm)
+    assertNotNull(vm.uiState.value.game!!.result)
+    vm.onLockSelected(LockModel.Master3)
+    val state = vm.uiState.value
+    assertEquals(LockModel.Master3, state.lock)
+    assertNull(state.game)
+    assertTrue(state.hints)
+  }
+
+  @Test
+  fun `each lock keeps its own best times and stretches the par`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onLockSelected(LockModel.American1100)
+    vm.onModelBound(american1100Geometry)
+    backgroundScope.launch { vm.runFrameLoop(frameClock()) { _, _ -> } }
+    records.best[LockModel.Trainer to GameTier.Apprentice] = 1_000L
+    vm.onGameStarted(GameTier.Apprentice)
+    // The trainer's record is not this lock's.
+    assertNull(vm.uiState.value.game!!.bestMillis)
   }
 
   private companion object {

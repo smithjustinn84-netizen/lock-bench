@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.game.GameResult
 import com.lockpicking.bench.ui.bench.GameUiState
 import com.lockpicking.bench.ui.theme.BenchColors
@@ -42,6 +43,7 @@ fun formatGameTime(millis: Long): String {
 @Composable
 fun GameStatusBlock(
   game: GameUiState,
+  lock: LockModel,
   setCount: Int,
   pinCount: Int,
   elapsedMillis: () -> Long,
@@ -64,7 +66,11 @@ fun GameStatusBlock(
     game.bestMillis?.let { add(stringResource(R.string.game_best, formatGameTime(it))) }
   }.joinToString("  ·  ")
   Column(modifier) {
-    Text(stringResource(R.string.game_title, tier, game.lockNumber), style = BenchType.Label, color = BenchColors.Dim)
+    Text(
+      stringResource(R.string.game_title, stringResource(lock.label), tier, game.lockNumber),
+      style = BenchType.Label,
+      color = BenchColors.Dim,
+    )
     Text(
       formatGameTime(elapsed),
       style = BenchType.Headline,
@@ -108,7 +114,7 @@ fun ResultsCard(result: GameResult, onNext: () -> Unit, onQuit: () -> Unit, modi
         Text(stringResource(R.string.game_previous_best, formatGameTime(it)), style = BenchType.Small, color = BenchColors.Dim)
       }
       if (result.stars < 3) {
-        Text(stringResource(R.string.game_par, result.tier.parSeconds), style = BenchType.Small, color = BenchColors.Dim)
+        Text(stringResource(R.string.game_par, result.parSeconds), style = BenchType.Small, color = BenchColors.Dim)
       }
       Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         BenchButton(stringResource(R.string.game_next), selected = true, onClick = onNext)

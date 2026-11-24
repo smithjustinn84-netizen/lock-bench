@@ -218,6 +218,19 @@ private fun DrawScope.drawPinStack(
     drawRect(BenchColors.Ink, Offset(left + cocked + pinWidth - inset, waistTop), Size(inset, waist))
   }
 
+  if (spec.serrated) {
+    // The grooves of a serrated driver, nicked out of both ends: the lower ladder is the one that catches.
+    val nick = pinWidth * 0.2f
+    val stroke = 1.5.dp.toPx()
+    for (k in 1..LockMechanics.SERRATIONS) {
+      val rise = k * LockMechanics.SERRATION_PITCH * scale.unit
+      for (y in floatArrayOf(scale.y(driverBase) - rise, scale.y(driverTop) + rise)) {
+        drawLine(BenchColors.Ink, Offset(left + cocked, y), Offset(left + cocked + nick, y), strokeWidth = stroke)
+        drawLine(BenchColors.Ink, Offset(left + cocked + pinWidth - nick, y), Offset(left + cocked + pinWidth, y), strokeWidth = stroke)
+      }
+    }
+  }
+
   val keyColor = if (state == PinState.Overset) BenchColors.Fault else BenchColors.Brass
   val keyPath = Path().apply {
     // Tapered tip at the bottom, as on the model.

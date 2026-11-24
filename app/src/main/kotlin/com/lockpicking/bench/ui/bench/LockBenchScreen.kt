@@ -43,6 +43,7 @@ import com.lockpicking.bench.R
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
 import com.lockpicking.bench.ui.bench.feedback.LockHaptics
 import com.lockpicking.bench.ui.bench.feedback.LockSoundEngine
@@ -182,6 +183,11 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       viewModel.onHandsSwapped()
     },
     onPreset = viewModel::onPresetSelected,
+    onLock = { lock ->
+      // The lock under the thumbs is about to be taken off the bench.
+      touch.router.letGo()
+      viewModel.onLockSelected(lock)
+    },
     onPlay = { tier ->
       touch.router.letGo()
       viewModel.onGameStarted(tier)
@@ -199,6 +205,7 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   ) { contentPadding ->
     BenchScene(
       host = viewModel,
+      lock = state.lock,
       modelInfo = state.modelInfo,
       preset = state.preset,
       presetResetKey = state.presetResetKey,
@@ -235,6 +242,7 @@ fun LockBenchScreen(
   onReset: () -> Unit,
   onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
+  onLock: (LockModel) -> Unit,
   onPlay: (GameTier) -> Unit,
   onQuit: () -> Unit,
   onNextLock: () -> Unit,
@@ -269,7 +277,7 @@ fun LockBenchScreen(
       Row(Modifier.fillMaxWidth().align(Alignment.TopStart), verticalAlignment = Alignment.Top) {
         val game = state.game
         if (game != null) {
-          GameStatusBlock(game, state.setCount, state.pinCount, gameElapsedMillis, Modifier.weight(1f).padding(end = 12.dp))
+          GameStatusBlock(game, state.lock, state.setCount, state.pinCount, gameElapsedMillis, Modifier.weight(1f).padding(end = 12.dp))
         } else {
           StatusBlock(state.status(), Modifier.weight(1f).padding(end = 12.dp))
           // Pin lift in millimetres and the plug's angle: not for a blind round.
@@ -344,6 +352,7 @@ fun LockBenchScreen(
           ghost = state.ghost,
           swapHands = state.swapHands,
           preset = state.preset,
+          lock = state.lock,
           gameTier = state.game?.tier,
           blind = state.blind,
           onExplodeChange = onExplodeChange,
@@ -353,6 +362,7 @@ fun LockBenchScreen(
           onReset = onReset,
           onSwapHands = onSwapHands,
           onPreset = onPreset,
+          onLock = onLock,
           onPlay = {
             drawerOpen = false
             onPlay(it)

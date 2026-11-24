@@ -13,6 +13,8 @@
     <string name="status_seized_hint">The binding pin is seized. Ease the wrench until it moves.</string>
     <string name="status_ease_off">EASE OFF</string>
     <string name="status_ease_off_hint">Keep the pick on pin %1$d and ease the wrench. The plug has to turn back.</string>
+    <string name="status_caught">CAUGHT</string>
+    <string name="status_caught_hint">A serration on pin %1$d has caught. It is not set: ease the wrench and keep lifting.</string>
     <string name="status_false_set">FALSE SET</string>
     <string name="status_false_set_hint">The plug is hanging on pin %1$d\'s spool. Lift it and ease the wrench.</string>
     <string name="status_picking">%1$d / %2$d SET</string>
@@ -30,13 +32,19 @@
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="control_play">PLAY</string>
+    <string name="control_lock">LOCK</string>
+
+    <!-- Locks -->
+    <string name="lock_trainer">TRAINER</string>
+    <string name="lock_master3">MASTER NO. 3</string>
+    <string name="lock_american1100">AMERICAN 1100</string>
     <string name="control_give_up">GIVE UP</string>
 
     <!-- Blind game -->
     <string name="tier_apprentice">APPRENTICE</string>
     <string name="tier_journeyman">JOURNEYMAN</string>
     <string name="tier_master">MASTER</string>
-    <string name="game_title">BLIND · %1$s · LOCK %2$d</string>
+    <string name="game_title">BLIND · %1$s · %2$s · LOCK %3$d</string>
     <string name="game_sets">%1$d/%2$d set</string>
     <string name="game_mistakes">%1$d mistakes</string>
     <string name="game_best">best %1$s</string>

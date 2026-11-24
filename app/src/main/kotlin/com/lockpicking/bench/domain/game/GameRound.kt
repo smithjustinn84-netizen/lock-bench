@@ -13,6 +13,8 @@ data class GameResult(
   /** Times the wrench was pulled hard enough to seize the binding pin. */
   val seizes: Int,
   val stars: Int,
+  /** The time a clean pick had to beat for three stars. */
+  val parSeconds: Int,
   /** The best time for this tier before this round, or null if there was none. */
   val previousBestMillis: Long?,
 ) {
@@ -33,6 +35,8 @@ class GameRound(
   random: Random,
   /** The last lock's order, so two locks in a row never bind the same way. */
   previousOrder: List<Int>? = null,
+  /** Open it inside this, with no mistakes, for three stars. A harder lock gets longer than the tier's own. */
+  val parSeconds: Int = tier.parSeconds,
 ) {
   val bindingOrder: List<Int> = shuffle(pinCount, random, previousOrder)
 
@@ -94,11 +98,11 @@ class GameRound(
   /** The result of a finished round, against the tier's [previousBestMillis]. */
   fun result(previousBestMillis: Long?): GameResult {
     check(finished) { "the lock is not open yet" }
-    return GameResult(tier, finishedAfter, drops, oversets, seizes, stars(), previousBestMillis)
+    return GameResult(tier, finishedAfter, drops, oversets, seizes, stars(), parSeconds, previousBestMillis)
   }
 
   private fun stars(): Int = when {
-    mistakes == 0 && finishedAfter <= tier.parSeconds * 1000L -> 3
+    mistakes == 0 && finishedAfter <= parSeconds * 1000L -> 3
     mistakes <= 2 -> 2
     else -> 1
   }

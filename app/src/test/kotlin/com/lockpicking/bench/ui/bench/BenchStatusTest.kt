@@ -1,6 +1,7 @@
 package com.lockpicking.bench.ui.bench
 
 import com.lockpicking.bench.domain.lock.TorqueBand
+import com.lockpicking.bench.testing.american1100Geometry
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -21,6 +22,13 @@ class BenchStatusTest {
   fun `with tension and no binding pin there is no hint`() {
     val state = BenchUiState(band = TorqueBand.Firm, bindingPin = -1)
     assertEquals(BenchStatus.Picking(setCount = 0, pinCount = 4, bindingPinNumber = null), state.status())
+  }
+
+  @Test
+  fun `a blocked pin reads as caught on a serrated driver and as ease off on a spool`() {
+    val state = BenchUiState(geometry = american1100Geometry, band = TorqueBand.Firm)
+    assertEquals(BenchStatus.Caught(pinNumber = 1), state.copy(blockedPin = 0).status())
+    assertEquals(BenchStatus.EaseOff(pinNumber = 2), state.copy(blockedPin = 1).status())
   }
 
   @Test

@@ -18,14 +18,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
 import com.lockpicking.bench.domain.game.GameTier
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.ui.bench.CameraPreset
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 
 /**
  * The bench drawer: explode slider, the bench toggles, the camera presets, which hand does
- * what, and the blind game. While a blind lock is being picked ([blind]) everything that would
- * let you see into it is switched off, and RESET gives the round up.
+ * what, which lock is on the bench, and the blind game. While a blind lock is being picked
+ * ([blind]) everything that would let you see into it is switched off, the lock cannot be
+ * swapped for another, and RESET gives the round up.
  */
 @Composable
 fun ControlBar(
@@ -35,6 +37,7 @@ fun ControlBar(
   ghost: Boolean,
   swapHands: Boolean,
   preset: CameraPreset,
+  lock: LockModel,
   gameTier: GameTier?,
   blind: Boolean,
   onExplodeChange: (Float) -> Unit,
@@ -44,6 +47,7 @@ fun ControlBar(
   onReset: () -> Unit,
   onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
+  onLock: (LockModel) -> Unit,
   onPlay: (GameTier) -> Unit,
   onQuit: () -> Unit,
   modifier: Modifier = Modifier,
@@ -66,6 +70,12 @@ fun ControlBar(
           BenchButton(stringResource(option.label), selected = option == preset, enabled = !blind) { onPreset(option) }
         }
         BenchToggle(stringResource(R.string.control_swap), swapHands, onClick = onSwapHands)
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.control_lock), style = BenchType.Label, color = BenchColors.Dim, modifier = Modifier.width(66.dp))
+        LockModel.entries.forEach { option ->
+          BenchButton(stringResource(option.label), selected = option == lock, enabled = !blind) { onLock(option) }
+        }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.control_play), style = BenchType.Label, color = BenchColors.Dim, modifier = Modifier.width(66.dp))
@@ -112,4 +122,12 @@ val GameTier.label: Int
     GameTier.Apprentice -> R.string.tier_apprentice
     GameTier.Journeyman -> R.string.tier_journeyman
     GameTier.Master -> R.string.tier_master
+  }
+
+/** The name a lock goes by on its button and in the HUD. */
+val LockModel.label: Int
+  get() = when (this) {
+    LockModel.Trainer -> R.string.lock_trainer
+    LockModel.Master3 -> R.string.lock_master3
+    LockModel.American1100 -> R.string.lock_american1100
   }

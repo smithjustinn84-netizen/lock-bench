@@ -1,6 +1,7 @@
 """
 Prints the node tree, per-node triangle counts, bounds, materials and extras of a .glb, and
-checks it against the Lock Bench export contract (node names, triangle budget).
+checks it against the Lock Bench export contract (node names, triangle budget). With no path
+it checks the trainer.
 
     python3 tools/inspect_glb.py [path/to/file.glb] [--section]
 """
@@ -15,9 +16,7 @@ ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 PATH = ARGS[0] if ARGS else os.path.join(
     ROOT, "app", "src", "main", "assets", "models", "cutaway_padlock.glb")
 
-REQUIRED = (["Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick"]
-            + [f"{kind}_{i}" for kind in ("KeyPin", "DriverPin", "Spring") for i in range(1, 5)])
-TRIANGLE_BUDGET = 15_000
+TRIANGLE_BUDGET = 18_000
 
 with open(PATH, "rb") as f:
     data = f.read()
@@ -66,9 +65,16 @@ for m in doc["materials"]:
           f"alphaMode={m.get('alphaMode', 'OPAQUE')}")
 
 names = {n["name"] for n in doc["nodes"]}
+# A lock has as many stacks as it has key pins, numbered from 1 with no gaps.
+pin_count = 0
+while f"KeyPin_{pin_count + 1}" in names:
+    pin_count += 1
+REQUIRED = (["Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick", "KeyPin_1"]
+            + [f"{kind}_{i}" for kind in ("KeyPin", "DriverPin", "Spring") for i in range(1, pin_count + 1)])
 missing = [n for n in REQUIRED if n not in names]
 print()
 print(f"triangles: {total} / {TRIANGLE_BUDGET}  {'OK' if total < TRIANGLE_BUDGET else 'OVER BUDGET'}")
+print(f"pin stacks: {pin_count}")
 print(f"required nodes: {'all present' if not missing else 'MISSING ' + ', '.join(missing)}")
 
 

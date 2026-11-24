@@ -21,7 +21,8 @@ import kotlin.math.atan2
 import kotlin.math.sign
 
 /**
- * Binds the named nodes of `cutaway_padlock.glb` and poses them.
+ * Binds the named nodes of a lock's .glb and poses them. Every lock on the bench is built to the
+ * same node contract (see `tools/build_padlock.py`); they differ in how many stacks they have.
  *
  * The .glb is the source of truth for geometry: rest positions are captured from the nodes, and
  * the travel each part needs comes from the glTF `extras` the Blender script wrote. Nothing
@@ -70,19 +71,23 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private val byName: Map<String, Node> =
     modelNode.nodes.mapNotNull { node -> node.name?.let { it to node } }.toMap()
 
-  /** Names the contract requires that the file does not have. Empty when the asset is good. */
-  private val missing: List<String> = REQUIRED.filterNot { it in byName }
-
   private val nodeNames: List<String> = byName.keys.sorted()
+
+  /** The model has as many stacks as it has key pins, numbered from 1 with no gaps. */
+  private val pinCount: Int = generateSequence(1) { it + 1 }.takeWhile { "KeyPin_$it" in byName }.count()
+
+  init {
+    require(pinCount > 0) { "the lock model has no pin stacks (found: $nodeNames)" }
+  }
 
   private val body = part("Body_Cutaway")
   private val shackle = part("Shackle")
   private val plug = part("Core_Plug")
   private val wrench = part("TensionWrench")
   private val pick = part("HookPick")
-  private val keyPins = (1..PIN_COUNT).map { part("KeyPin_$it") }
-  private val driverPins = (1..PIN_COUNT).map { part("DriverPin_$it") }
-  private val springs = (1..PIN_COUNT).map { part("Spring_$it") }
+  private val keyPins = (1..pinCount).map { part("KeyPin_$it") }
+  private val driverPins = (1..pinCount).map { part("DriverPin_$it") }
+  private val springs = (1..pinCount).map { part("Spring_$it") }
 
   private val plugExtras = extras(plug.node)
 
@@ -92,17 +97,19 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
   /** The lock's dimensions as the .glb authors them. */
   val geometry: LockGeometry = LockGeometry(
-    pinSpecs = (0 until PIN_COUNT).map { i ->
+    pinSpecs = (0 until pinCount).map { i ->
+      val driver = extras(driverPins[i].node)
       PinSpec(
         number = i + 1,
         liftToShear = extras(keyPins[i].node).getDouble("lift_to_shear").toFloat(),
         springRest = extras(springs[i].node).getDouble("rest_length").toFloat(),
-        spool = extras(driverPins[i].node).optBoolean("spool", false),
+        spool = driver.optBoolean("spool", false),
+        serrated = driver.optBoolean("serrated", false),
       )
     },
     // The plug sits at the origin, so plug-local Z is world Z.
     pinZ = keyPins.map { it.rest.z },
-    pinNodeNames = (1..PIN_COUNT).map { "KeyPin_$it" },
+    pinNodeNames = (1..pinCount).map { "KeyPin_$it" },
     pinRestY = pinRestY,
     shearY = plugExtras.optDouble("shear_y", 0.07).toFloat(),
     chamberTop = plugExtras.optDouble("chamber_top", 0.25).toFloat(),
@@ -125,11 +132,10 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private var appliedPlug = Float.NaN
   private var appliedSwing = Float.NaN
   private var appliedPickPitch = Float.NaN
-  private val appliedSpring = FloatArray(PIN_COUNT) { Float.NaN }
+  private val appliedSpring = FloatArray(pinCount) { Float.NaN }
 
   init {
-    Log.i(TAG, "bound ${byName.size} nodes: $nodeNames")
-    if (missing.isNotEmpty()) Log.e(TAG, "model is missing required nodes: $missing")
+    Log.i(TAG, "bound ${byName.size} nodes, $pinCount pin stacks: $nodeNames")
   }
 
   /**
@@ -155,7 +161,7 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
       plug.node.rotation = Rotation(z = pose.plugDegrees)
     }
 
-    for (i in 0 until PIN_COUNT) {
+    for (i in 0 until pinCount) {
       // Key pins are children of the plug: their Y is the plug's, and they turn with it.
       val driverLift = pins.driverLift(i)
       keyPins[i].offset(y = pins.keyLift(i) + 0.05f * e)
@@ -227,14 +233,13 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   }
 
   private fun part(name: String): Part =
-    Part(byName[name] ?: error("cutaway_padlock.glb has no node named '$name' (found: $nodeNames)"))
+    Part(byName[name] ?: error("the lock model has no node named '$name' (found: $nodeNames)"))
 
   private fun extras(node: Node): JSONObject =
     (node as? ModelNode.ChildNode)?.extras?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
 
   companion object {
     private const val TAG = "LockRig"
-    private const val PIN_COUNT = LockGeometry.PIN_COUNT
     private const val EPS = 1e-5f
     private const val ROLL_EPS = 0.01f
 
@@ -243,9 +248,6 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
     /** Extra rise beyond the toe's engagement so the swing visibly clears the housing. */
     private const val SHACKLE_CLEARANCE = 0.022f
-
-    private val REQUIRED: List<String> = listOf("Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick") +
-      listOf("KeyPin", "DriverPin", "Spring").flatMap { kind -> (1..PIN_COUNT).map { "${kind}_$it" } }
 
     private fun differs(a: Float, b: Float) = a.isNaN() || abs(a - b) > EPS
 

@@ -35,7 +35,7 @@ data class LockGeometry(
   val pinCount: Int get() = pinSpecs.size
 
   companion object {
-    /** The number of pin stacks the model is built with. */
-    const val PIN_COUNT = 4
+    /** How many pin stacks to lay the HUD out for before a model has bound and said how many it has. */
+    const val DEFAULT_PIN_COUNT = 4
   }
 }

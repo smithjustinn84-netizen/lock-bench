@@ -69,6 +69,9 @@ fun cueFor(event: LockEvent, torque: Float): FeedbackCue {
       FeedbackCue(Haptic.Tick, LockSound.CounterTick, if (last) 0.8f else 0.5f)
     }
     is LockEvent.SpoolBlocked -> FeedbackCue(Haptic.Refuse, LockSound.Blocked, 0.5f + 0.5f * load)
+    // A serration is meant to be mistaken for a set: the same click, a little short of it.
+    is LockEvent.SerrationClick -> FeedbackCue(Haptic.Click, LockSound.SetClick, 0.35f + 0.45f * load)
+    is LockEvent.SerrationHeld -> FeedbackCue(Haptic.Refuse, LockSound.Blocked, 0.5f + 0.5f * load)
     is LockEvent.Seized -> FeedbackCue(Haptic.Refuse, LockSound.Blocked, 1f)
     is LockEvent.Grit -> FeedbackCue(Haptic.Grain, LockSound.Grit, 0.2f + 0.8f * load)
     is LockEvent.PinOverset -> FeedbackCue(Haptic.Thud, LockSound.Jam, 0.9f)

@@ -13,6 +13,7 @@ import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.model.LockGeometry
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.motion.FrameClock
 import com.lockpicking.bench.domain.motion.RigPose
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
@@ -20,6 +21,7 @@ import com.lockpicking.bench.ui.bench.input.PickInput
 import com.lockpicking.bench.ui.bench.input.WrenchInput
 import com.lockpicking.bench.ui.bench.scene.BenchSceneHost
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -40,6 +43,9 @@ import kotlin.random.Random
  * The 3D scene lives and dies with the composition, so it never reaches in here. It reports
  * the lock's [LockGeometry] once the model binds ([onModelBound]), then drives [runFrameLoop]
  * with the display's frame clock and poses itself from what each frame hands back.
+ *
+ * It also swaps locks. A lock is a model, so choosing one ([onLockSelected]) empties the bench
+ * until the scene has loaded and bound the new one.
  *
  * It also runs the blind game: a [GameRound] deals a lock with a shuffled binding order,
  * scores what the lock reports, and times the round on [clock].
@@ -87,17 +93,51 @@ class LockBenchViewModel(
   /** The live pose, torque and plug angle included, or null until the model has bound. */
   val pose: RigPose? get() = simulation?.pose
 
+  private var infoLoad: Job? = null
+
   init {
-    viewModelScope.launch {
+    loadModelInfo(_uiState.value.lock)
+  }
+
+  private fun loadModelInfo(lock: LockModel) {
+    infoLoad?.cancel()
+    infoLoad = viewModelScope.launch {
       try {
-        val info = assets.loadModelInfo()
-        _uiState.update { it.copy(modelInfo = info) }
+        val info = assets.loadModelInfo(lock)
+        // A slow read must not land on a bench that has moved on to another lock.
+        _uiState.update { if (it.lock == lock) it.copy(modelInfo = info) else it }
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
         onModelFailed(e.message ?: e.toString())
       }
     }
+  }
+
+  /**
+   * Puts [lock] on the bench. The lock that was there goes at once, simulation and all; the new
+   * one arrives when the scene has loaded its model and calls [onModelBound]. Not while a blind
+   * round is being picked: that lock has to be opened or given up first.
+   */
+  fun onLockSelected(lock: LockModel) {
+    if (picking() || lock == _uiState.value.lock) return
+    val hints = if (_uiState.value.game != null) sandboxHints else _uiState.value.hints
+    round = null
+    simulation = null
+    lastSnapshot = null
+    _motionTick.value = 0
+    _uiState.update {
+      BenchUiState(
+        lock = lock,
+        hints = hints,
+        explode = it.explode,
+        ghost = it.ghost,
+        swapHands = it.swapHands,
+        preset = if (it.game != null) CameraPreset.ShearSide else it.preset,
+        presetResetKey = it.presetResetKey + 1,
+      )
+    }
+    loadModelInfo(lock)
   }
 
   // ── Scene lifecycle ─────────────────────────────────────────────────────────────────────────
@@ -256,7 +296,7 @@ class LockBenchViewModel(
   fun onGameQuit() {
     if (_uiState.value.game == null) return
     round = null
-    simulation?.deal(LockMechanics.DEFAULT_BINDING_ORDER)
+    simulation?.let { it.deal(LockMechanics.defaultBindingOrder(it.geometry.pinCount)) }
     _uiState.update {
       it.copy(game = null, hints = sandboxHints, preset = CameraPreset.ShearSide, presetResetKey = it.presetResetKey + 1)
     }
@@ -281,14 +321,16 @@ class LockBenchViewModel(
 
   private fun dealRound(tier: GameTier, lockNumber: Int) {
     val sim = simulation ?: return
-    val next = GameRound(tier, sim.geometry.pinCount, random, previousOrder = round?.bindingOrder)
+    val lock = _uiState.value.lock
+    val par = (tier.parSeconds * lock.parFactor).roundToInt()
+    val next = GameRound(tier, sim.geometry.pinCount, random, previousOrder = round?.bindingOrder, parSeconds = par)
     round = next
     sim.setExplode(0f)
     sim.setGhost(false)
     sim.deal(next.bindingOrder, tier.seizeAt)
     _uiState.update {
       it.copy(
-        game = GameUiState(tier = tier, lockNumber = lockNumber, bestMillis = records.bestMillis(tier)),
+        game = GameUiState(tier = tier, lockNumber = lockNumber, bestMillis = records.bestMillis(lock, tier)),
         hints = false,
         ghost = false,
         explode = 0f,
@@ -305,11 +347,12 @@ class LockBenchViewModel(
     val current = round ?: return
     val before = current.mistakes
     if (current.onEvent(event, clock.nowMillis())) {
-      val result = current.result(records.bestMillis(current.tier))
-      if (result.newBest) records.saveBest(current.tier, result.timeMillis)
+      val lock = _uiState.value.lock
+      val result = current.result(records.bestMillis(lock, current.tier))
+      if (result.newBest) records.saveBest(lock, current.tier, result.timeMillis)
       _uiState.update {
         it.copy(
-          game = it.game?.copy(result = result, mistakes = result.mistakes, bestMillis = records.bestMillis(current.tier)),
+          game = it.game?.copy(result = result, mistakes = result.mistakes, bestMillis = records.bestMillis(lock, current.tier)),
           // The reveal: round to the cut side, to see what you felt.
           preset = CameraPreset.ShearSide,
           presetResetKey = it.presetResetKey + 1,
