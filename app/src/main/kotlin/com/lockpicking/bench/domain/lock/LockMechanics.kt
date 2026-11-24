@@ -267,36 +267,44 @@ class LockMechanics(
    */
   fun liftLimit(pin: Int, rake: Boolean = false): Float {
     limitKind = Limit.Travel
-    val shear = pins[pin].liftToShear
-    when (pinStates[pin]) {
-      PinState.Overset -> return keyLifts[pin]
-      PinState.Set -> return if ((rake && torque <= T_EASED) || (held[pin] && setThisPush[pin])) maxLift(pin) else shear
-      PinState.Resting -> Unit
+    return when (pinStates[pin]) {
+      PinState.Overset -> keyLifts[pin]
+      PinState.Set -> if (eased(rake) || (held[pin] && setThisPush[pin])) maxLift(pin) else pins[pin].liftToShear
+      PinState.Resting -> restingLimit(pin)
     }
+  }
+
+  /** A rake under a light enough wrench: the plug gives to a passing peak. */
+  private fun eased(rake: Boolean): Boolean = rake && torque <= T_EASED
+
+  private fun restingLimit(pin: Int): Float {
     if (!engaged) return maxLift(pin)
     if (seized && bindingPin == pin) {
       limitKind = Limit.Seized
       return keyLifts[pin]
     }
-    if (pins[pin].serrated && torque > T_SERRATION && bindingPin == pin) {
-      val catch = nextSerration(pin, driverLifts[pin])
-      if (!catch.isNaN()) {
-        limitKind = Limit.Serration
-        return catch
-      }
-    }
-    if (pins[pin].spool) {
-      // The lowest clearance the pick may force the plug back to on this spool's lower shoulder.
-      val allowed = min(falseSetDepth, spoolGate())
-      if (allowed > 0f) {
-        val stop = shear - SPOOL_FLANGE - allowed * SPOOL_SHOULDER
-        if (driverLifts[pin] <= stop + SNAP) {
-          limitKind = Limit.Spool
-          return max(stop, 0f)
-        }
-      }
-    }
-    return maxLift(pin)
+    return serrationStop(pin) ?: spoolStop(pin) ?: maxLift(pin)
+  }
+
+  /** The groove a binding serrated driver catches on next, or null if it will not catch. */
+  private fun serrationStop(pin: Int): Float? {
+    if (!pins[pin].serrated || torque <= T_SERRATION || bindingPin != pin) return null
+    val catch = nextSerration(pin, driverLifts[pin])
+    if (catch.isNaN()) return null
+    limitKind = Limit.Serration
+    return catch
+  }
+
+  /** How far a spool's lower shoulder lets the pick force the plug back, or null if it does not stop it. */
+  private fun spoolStop(pin: Int): Float? {
+    if (!pins[pin].spool) return null
+    // The lowest clearance the pick may force the plug back to on this spool's lower shoulder.
+    val allowed = min(falseSetDepth, spoolGate())
+    if (allowed <= 0f) return null
+    val stop = pins[pin].liftToShear - SPOOL_FLANGE - allowed * SPOOL_SHOULDER
+    if (driverLifts[pin] > stop + SNAP) return null
+    limitKind = Limit.Spool
+    return max(stop, 0f)
   }
 
   /** True while anything is still moving and [step] has work to do. */
@@ -327,6 +335,27 @@ class LockMechanics(
    */
   fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f) {
     if (opened || pin !in pins.indices) return
+    take(pin, alone)
+    val rake = !alone
+    if (pins[pin].spool && pinStates[pin] == PinState.Resting) {
+      val knocked = rake && authority < SEAT_AUTHORITY
+      if (knocked != rattling[pin]) {
+        rattling[pin] = knocked
+        refreshPlug(pin)
+      }
+    }
+    when (pinStates[pin]) {
+      // Jammed against the bible: the pick cannot move it.
+      PinState.Overset -> noteHardStop(pin, wanted, keyLifts[pin])
+
+      PinState.Set -> pressSet(pin, lift, wanted, rake)
+
+      PinState.Resting -> pressResting(pin, lift, wanted, alone)
+    }
+  }
+
+  /** The pick takes [pin]; a hook, [alone], lets go of every other. */
+  private fun take(pin: Int, alone: Boolean) {
     if (alone) for (i in pins.indices) if (i != pin && held[i]) letGo(i)
     if (!held[pin]) {
       held[pin] = true
@@ -336,53 +365,39 @@ class LockMechanics(
       gritMarks[pin] = keyLifts[pin]
     }
     heldPin = pin
-    val rake = !alone
-    if (pins[pin].spool && pinStates[pin] == PinState.Resting) {
-      val knocked = rake && authority < SEAT_AUTHORITY
-      if (knocked != rattling[pin]) {
-        rattling[pin] = knocked
-        refreshPlug(pin)
-      }
-    }
+  }
+
+  private fun pressSet(pin: Int, lift: Float, wanted: Float, rake: Boolean) {
     val shear = pins[pin].liftToShear
-    when (pinStates[pin]) {
-      // Jammed against the bible: the pick cannot move it.
-      PinState.Overset -> {
-        noteHardStop(pin, wanted, keyLifts[pin])
-        return
-      }
-
-      PinState.Set -> {
-        if (rake && torque <= T_EASED) {
-          // The plug gives: the key pin rides the peak up and comes back down with it.
-          moveTo(pin, lift.coerceIn(0f, maxLift(pin)))
-          if (keyLifts[pin] < shear - SNAP) setThisPush[pin] = false
-          return
-        }
-        if (!setThisPush[pin]) {
-          // The plug has turned under this driver, so the key pin has nowhere to go past the
-          // shear line: its chamber no longer lines up.
-          keyLifts[pin] = lift.coerceIn(0f, shear)
-          noteHardStop(pin, wanted, shear)
-          return
-        }
-        keyLifts[pin] = lift.coerceIn(0f, maxLift(pin))
-        if (keyLifts[pin] > shear + oversetMargin()) {
-          pinStates[pin] = PinState.Overset
-          driverLifts[pin] = keyLifts[pin]
-          // The jam is its own event: the stop the pick is now against needs no second knock.
-          blockReported[pin] = true
-          onEvent(LockEvent.PinOverset(pin))
-          refreshPlug(pin)
-        } else if (rake && keyLifts[pin] < shear - SNAP) {
-          setThisPush[pin] = false
-        }
-        return
-      }
-
-      PinState.Resting -> Unit
+    if (eased(rake)) {
+      // The plug gives: the key pin rides the peak up and comes back down with it.
+      moveTo(pin, lift.coerceIn(0f, maxLift(pin)))
+      if (keyLifts[pin] < shear - SNAP) setThisPush[pin] = false
+      return
     }
+    if (!setThisPush[pin]) {
+      // The plug has turned under this driver, so the key pin has nowhere to go past the
+      // shear line: its chamber no longer lines up.
+      keyLifts[pin] = lift.coerceIn(0f, shear)
+      noteHardStop(pin, wanted, shear)
+      return
+    }
+    keyLifts[pin] = lift.coerceIn(0f, maxLift(pin))
+    if (keyLifts[pin] > shear + oversetMargin()) {
+      pinStates[pin] = PinState.Overset
+      driverLifts[pin] = keyLifts[pin]
+      // The jam is its own event: the stop the pick is now against needs no second knock.
+      blockReported[pin] = true
+      onEvent(LockEvent.PinOverset(pin))
+      refreshPlug(pin)
+    } else if (rake && keyLifts[pin] < shear - SNAP) {
+      setThisPush[pin] = false
+    }
+  }
 
+  private fun pressResting(pin: Int, lift: Float, wanted: Float, alone: Boolean) {
+    val rake = !alone
+    val shear = pins[pin].liftToShear
     val limit = liftLimit(pin, rake)
     val stop = limitKind
     noteBlock(pin, wanted, limit, stop)
@@ -391,7 +406,8 @@ class LockMechanics(
     val before = keyLifts[pin]
 
     val security = pins[pin].spool || pins[pin].serrated
-    if (rake && security && wasBinding && before >= shear) {
+    val waitsToDrop = rake && security && wasBinding
+    if (waitsToDrop && before >= shear) {
       // Already up past the line when the plug came to rest on it: nothing to set until it has dropped back.
       moveTo(pin, target)
       refreshPlug(pin)
@@ -405,29 +421,39 @@ class LockMechanics(
     if (wasBinding && pins[pin].serrated) reportSerrations(pin, before, keyLifts[pin])
     refreshPlug(pin)
     // A rake's pin has to have been the binder on the way up: the plug turning on to it as it arrives is not a set.
-    if (target >= shear && bindingPin == pin && (alone || !security || wasBinding)) {
-      // A fast drag can jump the whole set window in one event; give the first crossing to
-      // the set, and let only a deliberate further push overset.
-      moveTo(pin, target.coerceAtMost(shear + oversetMargin()))
-      pinStates[pin] = PinState.Set
-      setThisPush[pin] = true
-      blocked[pin] = false
-      if (pinStates.all { it == PinState.Set }) {
-        opened = true
-        release()
-        clearPlug()
-        onEvent(LockEvent.Opened)
-      } else {
-        onEvent(LockEvent.PinSet(pin, setCount))
-        refreshPlug(pin)
-      }
+    val mayCount = alone || !security || wasBinding
+    if (target >= shear && bindingPin == pin && mayCount) {
+      setPin(pin, target, shear)
       return
     }
     moveTo(pin, target)
     // A groove only holds once the pin is up on it, which may be this very push: the bench
     // stops asking once nothing moves, so it cannot wait for the next one to say so.
     if (stop == Limit.Serration) noteBlock(pin, wanted, limit, stop)
+    noteTexture(pin, before, wasBinding)
+  }
 
+  /** [pin] reaches the shear line on the binding edge and sets; with the last one the lock opens. */
+  private fun setPin(pin: Int, target: Float, shear: Float) {
+    // A fast drag can jump the whole set window in one event; give the first crossing to
+    // the set, and let only a deliberate further push overset.
+    moveTo(pin, target.coerceAtMost(shear + oversetMargin()))
+    pinStates[pin] = PinState.Set
+    setThisPush[pin] = true
+    blocked[pin] = false
+    if (pinStates.all { it == PinState.Set }) {
+      opened = true
+      release()
+      clearPlug()
+      onEvent(LockEvent.Opened)
+    } else {
+      onEvent(LockEvent.PinSet(pin, setCount))
+      refreshPlug(pin)
+    }
+  }
+
+  /** The grit of a binding pin, or a spring giving, felt every so far up the chamber. */
+  private fun noteTexture(pin: Int, before: Float, wasBinding: Boolean) {
     if (keyLifts[pin] - gritMarks[pin] >= (if (wasBinding) GRIT_STEP else SPRING_STEP)) {
       gritMarks[pin] = keyLifts[pin]
       onEvent(if (wasBinding) LockEvent.Grit(pin) else LockEvent.SpringTick(pin, keyLifts[pin] / maxLift(pin)))
@@ -492,24 +518,29 @@ class LockMechanics(
 
   /** Advance spring return by [dt] seconds. */
   fun step(dt: Float) {
-    if (engaged && torque <= T_EASED) {
-      for (jammed in pins.indices) {
-        if (pinStates[jammed] != PinState.Overset || held[jammed]) continue
-        // Eased off, the plug no longer pinches the key pin: it slips back, and so does its driver.
-        pinStates[jammed] = PinState.Resting
-        onEvent(LockEvent.OversetReleased(jammed))
-      }
-    }
+    if (engaged && torque <= T_EASED) releaseOversets()
     val fall = FALL_SPEED * dt
     for (i in pins.indices) {
       if (pinStates[i] == PinState.Overset) continue
       if (!held[i]) keyLifts[i] = max(0f, keyLifts[i] - fall)
       // A spool that was being knocked about has stopped once it is back down on whatever holds it.
-      if (rattling[i] && !held[i] && keyLifts[i] <= 0f && driverLifts[i] <= driverFloor(i) + fall) rattling[i] = false
+      if (rattling[i] && !held[i] && landed(i, fall)) rattling[i] = false
       driverLifts[i] = max(driverFloor(i), driverLifts[i] - fall)
     }
     refreshPlug()
   }
+
+  /** Eased off, the plug no longer pinches a jammed key pin: it slips back, and so does its driver. */
+  private fun releaseOversets() {
+    for (jammed in pins.indices) {
+      if (pinStates[jammed] != PinState.Overset || held[jammed]) continue
+      pinStates[jammed] = PinState.Resting
+      onEvent(LockEvent.OversetReleased(jammed))
+    }
+  }
+
+  /** [pin]'s stack is back down, its driver within one [fall] of whatever holds it. */
+  private fun landed(pin: Int, fall: Float): Boolean = keyLifts[pin] <= 0f && driverLifts[pin] <= driverFloor(pin) + fall
 
   private fun moveTo(pin: Int, lift: Float) {
     keyLifts[pin] = lift
@@ -572,17 +603,7 @@ class LockMechanics(
    */
   private fun refreshPlug(pusher: Int = -1) {
     val old = falseSetDepth
-    var depth = 0f
-    if (engaged && !opened) {
-      depth = 1f
-      var unset = 0
-      for (i in pins.indices) {
-        if (pinStates[i] == PinState.Set) continue
-        unset++
-        depth = min(depth, clearance(i))
-      }
-      if (unset == 0) depth = 0f
-    }
+    val depth = plugDepth()
     // Rounding in a driver resting on its stop must not creep the plug.
     if (abs(depth - old) < SNAP) return
     falseSetDepth = depth
@@ -602,6 +623,19 @@ class LockMechanics(
       }
       if (depth <= FALSE_SET_OFF) inFalseSet = false
     }
+  }
+
+  /** How far the pins now let the plug turn: 0 when it cannot, 1 into the deepest false set. */
+  private fun plugDepth(): Float {
+    if (!engaged || opened) return 0f
+    var depth = 1f
+    var unset = 0
+    for (i in pins.indices) {
+      if (pinStates[i] == PinState.Set) continue
+      unset++
+      depth = min(depth, clearance(i))
+    }
+    return if (unset == 0) 0f else depth
   }
 
   private fun counterStepAt(depth: Float): Int =
