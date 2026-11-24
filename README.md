@@ -5,13 +5,15 @@ An Android lockpicking bench: a 3D cutaway pin-tumbler padlock you pick with two
 Built with Jetpack Compose and [SceneView](https://github.com/SceneView/sceneview) (Filament).
 
 <p align="center">
-  <img src="docs/screenshots/cutaway.png" width="24%" alt="Isometric cutaway view of the padlock" />
-  <img src="docs/screenshots/shear.png" width="24%" alt="Side-on shear line view of the pin stacks" />
-  <img src="docs/screenshots/ghost.png" width="24%" alt="Ghost mode with a translucent housing" />
-  <img src="docs/screenshots/exploded.png" width="24%" alt="Exploded view of every part" />
+  <img src="docs/screenshots/cutaway.png" width="49%" alt="Isometric cutaway view of the padlock, with the tension zone on the left and the pick pad on the right" />
+  <img src="docs/screenshots/shear.png" width="49%" alt="Side-on shear line view with tension held and pin 1 binding" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/ghost.png" width="49%" alt="Ghost mode with a translucent housing" />
+  <img src="docs/screenshots/exploded.png" width="49%" alt="Exploded view of every part" />
 </p>
 
-<p align="center"><sub>Cutaway (ISO) · Shear line · Ghost · Exploded</sub></p>
+<p align="center"><sub>Cutaway (ISO) · Shear line under tension<br>Ghost · Exploded</sub></p>
 
 ## How to pick it
 
