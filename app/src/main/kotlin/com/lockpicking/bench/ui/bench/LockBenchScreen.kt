@@ -55,6 +55,7 @@ import com.lockpicking.bench.ui.bench.scene.BenchScene
 import com.lockpicking.bench.ui.components.BenchButton
 import com.lockpicking.bench.ui.components.ControlBar
 import com.lockpicking.bench.ui.components.GameStatusBlock
+import com.lockpicking.bench.ui.components.GuidePanel
 import com.lockpicking.bench.ui.components.PickPad
 import com.lockpicking.bench.ui.components.PickPadInset
 import com.lockpicking.bench.ui.components.ResultsCard
@@ -78,6 +79,7 @@ private val PickPadWidth = 264.dp
 private val HudMargin = 12.dp
 private val DrawerWidth = 400.dp
 private val ResultsWidth = 280.dp
+private val GuideWidth = 560.dp
 
 /** The parts of the HUD the touch router has to know the whereabouts of. */
 enum class HudPart {
@@ -95,6 +97,9 @@ enum class HudPart {
 
   /** The results card after a blind round, which takes its own touches. */
   Results,
+
+  /** The guide, which takes its own touches. */
+  Guide,
 }
 
 /**
@@ -113,7 +118,7 @@ private class TouchLayout(private val router: BenchTouchRouter) {
     }
     router.wrenchBounds = local(HudPart.Wrench) ?: TouchRect.Empty
     router.pickBounds = local(HudPart.Pick) ?: TouchRect.Empty
-    router.blocked = listOfNotNull(local(HudPart.Controls), local(HudPart.Results))
+    router.blocked = listOfNotNull(local(HudPart.Controls), local(HudPart.Results), local(HudPart.Guide))
   }
 }
 
@@ -196,6 +201,8 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       touch.router.letGo()
       viewModel.onGameQuit()
     },
+    // The guide covers the thumb zones: nothing stays held under it.
+    onGuide = touch.router::letGo,
     onNextLock = {
       touch.router.letGo()
       viewModel.onNextLock()
@@ -246,12 +253,14 @@ fun LockBenchScreen(
   onPlay: (GameTier) -> Unit,
   onQuit: () -> Unit,
   onNextLock: () -> Unit,
+  onGuide: () -> Unit,
   gameElapsedMillis: () -> Long,
   modifier: Modifier = Modifier,
   onPlaced: (HudPart, Rect) -> Unit = { _, _ -> },
   scene: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
   var drawerOpen by rememberSaveable { mutableStateOf(false) }
+  var guideOpen by rememberSaveable { mutableStateOf(false) }
   val direction = LocalLayoutDirection.current
   val insets = WindowInsets.safeDrawing.asPaddingValues()
   // Tension is the left hand's job unless the hands are swapped.
@@ -283,8 +292,21 @@ fun LockBenchScreen(
           // Pin lift in millimetres and the plug's angle: not for a blind round.
           LiveStatsPill(state.modelInfo, meter, telemetry)
         }
+        // The primer is for the open bench: a blind round's clock would run on under it.
         Row(Modifier.padding(start = 8.dp).width(84.dp)) {
-          BenchButton(stringResource(R.string.control_menu), selected = drawerOpen) { drawerOpen = !drawerOpen }
+          BenchButton(stringResource(R.string.control_guide), selected = guideOpen, enabled = state.game == null) {
+            if (!guideOpen) {
+              drawerOpen = false
+              onGuide()
+            }
+            guideOpen = !guideOpen
+          }
+        }
+        Row(Modifier.padding(start = 8.dp).width(84.dp)) {
+          BenchButton(stringResource(R.string.control_menu), selected = drawerOpen) {
+            drawerOpen = !drawerOpen
+            if (drawerOpen) guideOpen = false
+          }
         }
       }
       state.loadError?.let {
@@ -380,6 +402,18 @@ fun LockBenchScreen(
       }
       // A closed drawer is not in the way of anything.
       DisposableEffect(drawerOpen) { onDispose { onPlaced(HudPart.Controls, Rect.Zero) } }
+      if (guideOpen) {
+        GuidePanel(
+          onClose = { guideOpen = false },
+          modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 56.dp)
+            .width(GuideWidth)
+            .fillMaxHeight()
+            .onGloballyPositioned { onPlaced(HudPart.Guide, it.boundsInWindow()) },
+        )
+      }
+      DisposableEffect(guideOpen) { onDispose { onPlaced(HudPart.Guide, Rect.Zero) } }
     }
   }
 }

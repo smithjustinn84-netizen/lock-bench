@@ -59,6 +59,26 @@
     <string name="game_quit">QUIT</string>
     <string name="game_tap_shackle">Or tap the shackle for the next lock.</string>
 
+    <!-- Guide -->
+    <string name="control_guide">GUIDE</string>
+    <string name="control_close">CLOSE</string>
+    <string name="guide_title">HOW A PIN TUMBLER WORKS</string>
+    <string name="guide_rules_title">THE RULES</string>
+    <string name="guide_rules_body">Locksport is picking locks as a puzzle. Only pick a lock you own or have been asked to pick, and never one that is in use.</string>
+    <string name="guide_parts_title">THE PARTS</string>
+    <string name="guide_parts_body">The plug is the cylinder that turns, with the keyway cut in it. The housing around it holds still. Each column is a pin stack in its chamber: a key pin at the bottom, a driver pin above it, and a spring pushing both down. Turn on EXPLODED or GHOST to see them all.</string>
+    <string name="guide_shear_title">THE SHEAR LINE</string>
+    <string name="guide_shear_body">The shear line is the gap between the plug and the housing. A driver that crosses it pins the plug to the housing. The right key lifts every stack until the split between key pin and driver sits exactly on the line, and the plug turns. The SHEAR camera looks straight at it.</string>
+    <string name="guide_binding_title">BINDING</string>
+    <string name="guide_binding_body">No lock is made perfectly. Turn the plug a little and one driver catches on its chamber before the others: that is the binding pin. Lift it to the shear line and it sets; the plug creeps round and the next pin binds. The needle on the WRENCH dial shows the creep.</string>
+    <string name="guide_tension_title">TENSION</string>
+    <string name="guide_tension_body">The wrench turns the plug. Too little and set pins fall back. Too much and the binding pin seizes and will not lift. Let go and every pin drops. Lift a pin too far and its key pin crosses the line instead: it oversets. Ease off and it drops back.</string>
+    <string name="guide_spool_title">SPOOL PINS</string>
+    <string name="guide_spool_body">A spool driver is thin in the middle. Its waist can sit on the shear line and let the plug turn far: a false set. Keep lifting the spool and ease the wrench until the plug turns back a little (counter-rotation), and it sets.</string>
+    <string name="guide_serrated_title">SERRATED PINS</string>
+    <string name="guide_serrated_body">A serrated driver has fine grooves, and each one clicks on the shear line like a set that is not one. Pull hard and a groove catches. Keep the tension light and lift through the clicks.</string>
+    <string name="guide_more">The full primer, with a glossary, is docs/LOCKSPORT.md in the project.</string>
+
     <!-- Tension wrench -->
     <string name="wrench_title">WRENCH</string>
     <string name="wrench_slack">SLACK</string>

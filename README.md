@@ -4,6 +4,8 @@ An Android lockpicking bench: 3D cutaway pin-tumbler padlocks you pick with two 
 
 Built with Jetpack Compose and [SceneView](https://github.com/SceneView/sceneview) (Filament).
 
+New to locks? [A locksport primer](docs/LOCKSPORT.md) names the parts you are looking at and explains why picking works. The same primer, shorter, is behind the **GUIDE** button in the app.
+
 <p align="center">
   <img src="docs/screenshots/cutaway.png" width="49%" alt="Isometric cutaway view of the padlock, with the tension zone on the left and the pick pad on the right" />
   <img src="docs/screenshots/shear.png" width="49%" alt="Side-on shear line view with tension held and pin 1 binding" />
@@ -84,7 +86,7 @@ The plug dial's needle stays on every tier, because a real picker feels the plug
 
 ## Views
 
-The **BENCH** button in the top corner opens a drawer, so nothing sits under your thumbs while you pick.
+The **BENCH** button in the top corner opens a drawer, so nothing sits under your thumbs while you pick. The **GUIDE** button beside it opens a short primer on the parts of the lock and why picking works; the long version is [docs/LOCKSPORT.md](docs/LOCKSPORT.md). It is off during a blind round.
 
 | Control | What it does |
 | --- | --- |
@@ -117,6 +119,8 @@ app/src/main/assets/
   models/                 cutaway_padlock.glb (the trainer), master_no3_padlock.glb,
                           american_1100_padlock.glb
   environments/studio.hdr
+docs/
+  LOCKSPORT.md            what the parts are and why picking works
 tools/
   build_padlock.py        Blender script that generates the padlock models
   make_studio_hdr.py      paints the studio lighting HDR
