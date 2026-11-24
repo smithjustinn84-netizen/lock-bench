@@ -33,3 +33,4 @@ plugins {
 rootProject.name = "Lock Bench"
 
 include(":app")
+include(":baselineprofile")

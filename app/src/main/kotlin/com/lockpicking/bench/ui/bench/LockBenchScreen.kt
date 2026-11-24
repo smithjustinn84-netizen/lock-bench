@@ -1,6 +1,7 @@
 package com.lockpicking.bench.ui.bench
 
 import android.view.ViewConfiguration
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -138,6 +139,8 @@ fun Modifier.reportBounds(onBounds: (Rect) -> Unit): Modifier =
 @Composable
 fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  // Fully drawn once the splash lets go: the saved lock is known and the bench is on screen.
+  ReportDrawnWhen { state.restored }
   // Snapshot state, read only in the draw phase of the canvases that follow it.
   val motionTick = viewModel.motionTick
 

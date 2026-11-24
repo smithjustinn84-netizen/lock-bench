@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.detekt)
+  alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -63,6 +64,13 @@ kotlin {
   jvmToolchain(17)
 }
 
+baselineProfile {
+  // One profile in src/main, so release and benchmark both ship it.
+  mergeIntoMain = true
+  // Generating needs a device: only when asked, never as part of a release build or CI.
+  automaticGenerationDuringBuild = false
+}
+
 detekt {
   buildUponDefaultConfig = true
   config.setFrom(rootProject.file("config/detekt/detekt.yml"))
@@ -91,6 +99,8 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.datastore.preferences)
+  implementation(libs.androidx.profileinstaller)
+  baselineProfile(project(":baselineprofile"))
 
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
