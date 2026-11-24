@@ -35,28 +35,6 @@
     </issue>
 
     <issue
-        id="RememberReturnType"
-        message="`remember` calls must not return `Unit`"
-        errorLine1="  remember(renderer) {"
-        errorLine2="  ~~~~~~~~">
-        <location
-            file="src/main/kotlin/com/lockpicking/bench/ui/bench/scene/BenchScene.kt"
-            line="79"
-            column="3"/>
-    </issue>
-
-    <issue
-        id="RememberReturnType"
-        message="`remember` calls must not return `Unit`"
-        errorLine1="  remember(keyLight) {"
-        errorLine2="  ~~~~~~~~">
-        <location
-            file="src/main/kotlin/com/lockpicking/bench/ui/bench/scene/BenchScene.kt"
-            line="97"
-            column="3"/>
-    </issue>
-
-    <issue
         id="DiscouragedApi"
         message="Fixed screen orientations will be ignored in most cases, starting from Android 16. Android is moving toward a model where apps are expected to adapt to various orientations, display sizes, and aspect ratios."
         errorLine1="            android:screenOrientation=&quot;sensorLandscape&quot;"

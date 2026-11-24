@@ -76,7 +76,7 @@ fun BenchScene(
   val collisionSystem = rememberCollisionSystem(view)
   val invalidator = rememberRenderInvalidator()
 
-  remember(renderer) {
+  LaunchedEffect(renderer) {
     renderer.clearOptions = renderer.clearOptions.apply {
       clear = true
       clearColor = CLEAR_COLOR
@@ -94,7 +94,7 @@ fun BenchScene(
   // recomposition and each light write asks SceneView for a frame, which would keep an
   // otherwise parked scene rendering.
   val keyLight = rememberMainLightNode(engine)
-  remember(keyLight) {
+  LaunchedEffect(keyLight) {
     keyLight.intensity = 70_000f
     keyLight.lightDirection = Direction(-0.62f, -1.0f, -0.48f)
     keyLight.updateShadowOptions {
