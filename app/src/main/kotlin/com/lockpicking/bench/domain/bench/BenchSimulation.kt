@@ -115,6 +115,12 @@ class BenchSimulation(
   /** True while a pin under the rake is still on its way up to where the blade wants it. */
   private var rakeClimbing = false
 
+  /** Where the pin [allowedBy] last answered for stops, as a lift of its own. */
+  private var pinStopAt = 0f
+
+  /** The blade this sub-step, for [allowedBy] and [carry]. One, reused: this runs many times a frame. */
+  private val blade = BladeStep()
+
   /** What each pin has already been heard to do since the blade came under it, as bits of [Cue]. */
   private val cued = IntArray(geometry.pinCount)
 
@@ -264,15 +270,7 @@ class BenchSimulation(
     lock.applyTorque(torque.value)
 
     val depth = if (acceptsInput) pickDepth else Float.NaN
-    var pickMoving = false
-    if (tool == PickTool.Rake) {
-      val from = pick.pickZ
-      pickMoving = pick.slide(dt, depth)
-      scrub(from, pick.pickZ, dt, depth.isNaN())
-    } else {
-      runNudge(dt)
-      pushRequestedPin(dt)
-    }
+    var pickMoving = workPick(dt, depth)
     stepPins(dt)
 
     moving = choreography.advance(dt, lock) or moving
@@ -285,8 +283,29 @@ class BenchSimulation(
     moving = wrench.step(dt) or moving
     moving = explode.step(dt) or moving
     moving = bodyAlpha.step(dt) or moving
-    moving = moving || catchingUp || lock.isSettling || choreography.relocking || nudgeScript.isActive
+    moving = moving || stillBusy()
+    publishPose()
+    return moving
+  }
 
+  /** The rake slides and scrubs, or the hook works its pin. Returns true if the rake is still sliding. */
+  private fun workPick(dt: Float, depth: Float): Boolean {
+    if (tool == PickTool.Rake) {
+      val from = pick.pickZ
+      val sliding = pick.slide(dt, depth)
+      scrub(from, pick.pickZ, dt, depth.isNaN())
+      return sliding
+    }
+    runNudge(dt)
+    pushRequestedPin(dt)
+    return false
+  }
+
+  /** Something that is not a spring is still on its way: a pin catching up, a relock, a nudge. */
+  private fun stillBusy(): Boolean = catchingUp || lock.isSettling || choreography.relocking || nudgeScript.isActive
+
+  /** Writes the pose, and ticks [motionTick] if the plug, the wrench or the pick moved. */
+  private fun publishPose() {
     val plugBefore = pose.plugDegrees
     val torqueBefore = pose.torque
     val pickZBefore = pose.pickZ
@@ -294,7 +313,6 @@ class BenchSimulation(
     writePose()
     val pickMoved = pose.pickZ != pickZBefore || pose.pickY != pickYBefore
     if (pose.plugDegrees != plugBefore || pose.torque != torqueBefore || pickMoved) motionTick++
-    return moving
   }
 
   private fun clearRequest() {
@@ -374,26 +392,20 @@ class BenchSimulation(
       bladeLift = 0f
       return
     }
+    blade.z = z
+    blade.want = want
+    blade.reach = reach
+    blade.dt = dt
+    blade.authority = authority
     var lift = want
     var capPin = -1
     var capStop = 0f
     for (i in 0 until geometry.pinCount) {
-      val behind = (geometry.pinZ[i] - z) * outward
-      val o = rake.heightAt(behind)
-      val k = 1f - behind / reach
-      if (o.isNaN() || k < MIN_LEVER) continue
-      val wanted = want * k + o
-      if (wanted <= lock.keyLift(i)) continue
-      val soon = lock.reach(i, wanted, dt, wedge = true, authority = authority)
-      val limit = lock.liftLimit(i, rake = true)
-      val stop = min(soon, limit)
-      if (stop >= wanted) continue
-      if (soon < limit) rakeClimbing = rakeClimbing || soon > lock.keyLift(i) + REACHED
-      val allows = (stop - o) / k
+      val allows = allowedBy(i)
       if (allows < lift) {
         lift = allows
         capPin = i
-        capStop = stop
+        capStop = pinStopAt
       }
     }
     lift = max(lift, 0f)
@@ -401,23 +413,52 @@ class BenchSimulation(
 
     // In binding order, so the pin holding the plug is moved before the ones waiting on it.
     for (i in lock.bindingOrder) {
-      val behind = (geometry.pinZ[i] - z) * outward
-      val o = rake.heightAt(behind)
-      val k = 1f - behind / reach
-      // The pin that stopped the blade goes to its stop exactly: arithmetic must not leave it a hair short for good.
-      var at = if (o.isNaN() || k < MIN_LEVER) 0f else if (i == capPin) capStop else lift * k + o
-      // A jammed key pin stays where it is; the blade holds it only while it is up against it.
-      val touching = at > 0f && (lock.state(i) != PinState.Overset || at >= lock.keyLift(i) - TOUCHING)
-      if (!touching) {
-        if (lock.isHeld(i)) lock.release(i)
-        cued[i] = 0
-        continue
-      }
-      // An earlier pin in this step may have set and changed what this one is up against.
-      at = min(at, lock.reach(i, at, dt, wedge = true, authority = authority))
-      lock.press(i, at, wanted = want * k + o, alone = false, authority = authority)
+      val at = if (i == capPin) capStop else Float.NaN
+      carry(i, lift, at)
       if (lock.opened) return
     }
+  }
+
+  /**
+   * The highest pin [i] lets the blade's lead peak go, with its own stop in [pinStopAt]; NaN if
+   * it is not under the blade, or does not stop it.
+   */
+  private fun allowedBy(i: Int): Float {
+    val behind = (geometry.pinZ[i] - blade.z) * outward
+    val o = rake.heightAt(behind)
+    val k = 1f - behind / blade.reach
+    if (o.isNaN() || k < MIN_LEVER) return Float.NaN
+    val wanted = blade.want * k + o
+    if (wanted <= lock.keyLift(i)) return Float.NaN
+    val soon = lock.reach(i, wanted, blade.dt, wedge = true, authority = blade.authority)
+    val limit = lock.liftLimit(i, rake = true)
+    val stop = min(soon, limit)
+    if (stop >= wanted) return Float.NaN
+    if (soon < limit) rakeClimbing = rakeClimbing || soon > lock.keyLift(i) + REACHED
+    pinStopAt = stop
+    return (stop - o) / k
+  }
+
+  /**
+   * Carries pin [i] to the blade at [lift], or lets it go if the blade is not touching it.
+   * [capStop] is the pin's own stop if it is the one that stopped the blade, NaN if not.
+   */
+  private fun carry(i: Int, lift: Float, capStop: Float) {
+    val behind = (geometry.pinZ[i] - blade.z) * outward
+    val o = rake.heightAt(behind)
+    val k = 1f - behind / blade.reach
+    // The pin that stopped the blade goes to its stop exactly: arithmetic must not leave it a hair short for good.
+    var at = if (o.isNaN() || k < MIN_LEVER) 0f else if (!capStop.isNaN()) capStop else lift * k + o
+    // A jammed key pin stays where it is; the blade holds it only while it is up against it.
+    val touching = at > 0f && (lock.state(i) != PinState.Overset || at >= lock.keyLift(i) - TOUCHING)
+    if (!touching) {
+      if (lock.isHeld(i)) lock.release(i)
+      cued[i] = 0
+      return
+    }
+    // An earlier pin in this step may have set and changed what this one is up against.
+    at = min(at, lock.reach(i, at, blade.dt, wedge = true, authority = blade.authority))
+    lock.press(i, at, wanted = blade.want * k + o, alone = false, authority = blade.authority)
   }
 
   private fun runNudge(dt: Float) {
@@ -442,27 +483,40 @@ class BenchSimulation(
   private fun pushRequestedPin(dt: Float) {
     catchingUp = false
     val under = if (pickDepth.isNaN() || !acceptsInput) -1 else pick.pinUnderTip
-    if (under != tipPin) {
-      // Arriving under a land with the tip already up, it just rides along: no fresh knock.
-      wardReported = under < 0 && requestedLift > Keyway.LAND_CLEARANCE + WARD_SLOP
-      scrapeMark = pick.pickZ
-      tipPin = under
-      setOrigin = Float.NaN
-      if (under >= 0) onEvent(LockEvent.PinTouched(under, lock.feel(under)))
-    }
+    if (under != tipPin) arriveUnder(under)
     selectedPin = under
     // A relaxed hand is not holding the pin up: it goes back on its spring.
     if (under >= 0 && requestedLift > 0f) {
-      if (lock.heldPin >= 0 && lock.heldPin != under) lock.release()
-      val origin = setOrigin
-      val wanted = if (origin.isNaN()) requestedLift else lock.pins[under].liftToShear + (requestedLift - origin)
-      lock.press(under, lock.reach(under, wanted, dt), wanted)
-      catchingUp = !lock.opened && lock.keyLift(under) < min(wanted, lock.liftLimit(under)) - REACHED
+      pushPin(under, dt)
       return
     }
     if (lock.heldPin >= 0) lock.release()
     setOrigin = Float.NaN
     if (under >= 0 || pickDepth.isNaN()) return
+    dragOnLand()
+  }
+
+  /** The tip has come under pin [under], or under a land if it is -1. */
+  private fun arriveUnder(under: Int) {
+    // Arriving under a land with the tip already up, it just rides along: no fresh knock.
+    wardReported = under < 0 && requestedLift > Keyway.LAND_CLEARANCE + WARD_SLOP
+    scrapeMark = pick.pickZ
+    tipPin = under
+    setOrigin = Float.NaN
+    if (under >= 0) onEvent(LockEvent.PinTouched(under, lock.feel(under)))
+  }
+
+  /** The hand pushes [pin] up, and the pin follows only as fast as it will move. */
+  private fun pushPin(pin: Int, dt: Float) {
+    if (lock.heldPin >= 0 && lock.heldPin != pin) lock.release()
+    val origin = setOrigin
+    val wanted = if (origin.isNaN()) requestedLift else lock.pins[pin].liftToShear + (requestedLift - origin)
+    lock.press(pin, lock.reach(pin, wanted, dt), wanted)
+    catchingUp = !lock.opened && lock.keyLift(pin) < min(wanted, lock.liftLimit(pin)) - REACHED
+  }
+
+  /** Under a land: the tip knocks on the ward once it is up there, and scrapes as it drags. */
+  private fun dragOnLand() {
     if (requestedLift > Keyway.LAND_CLEARANCE + WARD_SLOP) {
       if (!wardReported) {
         wardReported = true
@@ -597,4 +651,13 @@ class BenchSimulation(
     /** Closer than this to where it is going, a pin has arrived. */
     const val REACHED = 1e-5f
   }
+}
+
+/** One sub-step of the rake's blade: where it is, what the hand asks of it, and how steadily. */
+private class BladeStep {
+  var z = 0f
+  var want = 0f
+  var reach = 0f
+  var dt = 0f
+  var authority = 0f
 }
