@@ -2,6 +2,7 @@ package com.lockpicking.bench.ui.bench
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lockpicking.bench.data.BenchPrefs
 import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.domain.bench.BenchSimulation
@@ -54,9 +55,11 @@ class LockBenchViewModel(
   private val assets: LockAssetRepository,
   private val records: GameRecords,
   private val clock: GameClock,
+  private val prefs: BenchPrefs,
 ) : ViewModel(), PickInput, WrenchInput, BenchSceneHost {
 
-  private val _uiState = MutableStateFlow(BenchUiState())
+  /** The bench opens on the lock it was left with. */
+  private val _uiState = MutableStateFlow(BenchUiState(lock = prefs.lastLock() ?: LockModel.Trainer))
   val uiState: StateFlow<BenchUiState> = _uiState.asStateFlow()
 
   private val _motionTick = MutableStateFlow(0)
@@ -137,6 +140,7 @@ class LockBenchViewModel(
         presetResetKey = it.presetResetKey + 1,
       )
     }
+    prefs.saveLastLock(lock)
     loadModelInfo(lock)
   }
 

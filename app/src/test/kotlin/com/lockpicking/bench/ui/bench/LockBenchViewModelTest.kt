@@ -1,5 +1,6 @@
 package com.lockpicking.bench.ui.bench
 
+import com.lockpicking.bench.data.BenchPrefs
 import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.glb.GlbInfo
@@ -66,6 +67,15 @@ class LockBenchViewModelTest {
 
   private val records = FakeRecords()
 
+  private class FakePrefs(var lock: LockModel? = null) : BenchPrefs {
+    override fun lastLock(): LockModel? = lock
+    override fun saveLastLock(lock: LockModel) {
+      this.lock = lock
+    }
+  }
+
+  private val prefs = FakePrefs()
+
   /** The round's clock runs on the test scheduler's virtual time. */
   private val clock = GameClock { dispatcher.scheduler.currentTime }
 
@@ -73,7 +83,7 @@ class LockBenchViewModelTest {
 
   private fun viewModel(result: () -> GlbInfo = { modelInfo }): LockBenchViewModel {
     repository = FakeRepository(result)
-    return LockBenchViewModel(repository, records, clock)
+    return LockBenchViewModel(repository, records, clock, prefs)
   }
 
   /** A 60 fps display on the test scheduler's virtual clock. */
@@ -473,6 +483,26 @@ class LockBenchViewModelTest {
     state = vm.uiState.value
     assertEquals(5, state.pinCount)
     assertEquals(5, vm.readout!!.pinCount)
+  }
+
+  @Test
+  fun `the chosen lock is remembered for the next launch`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onLockSelected(LockModel.Master3)
+    assertEquals(LockModel.Master3, prefs.lock)
+
+    val next = viewModel()
+    assertEquals(LockModel.Master3, next.uiState.value.lock)
+    advanceUntilIdle()
+    assertEquals(listOf(LockModel.Master3), repository.asked)
+  }
+
+  @Test
+  fun `a blind round that is refused a lock change leaves the saved lock alone`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    vm.onLockSelected(LockModel.Master3)
+    assertNull(prefs.lock)
   }
 
   @Test

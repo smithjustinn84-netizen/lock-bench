@@ -1,9 +1,11 @@
 package com.lockpicking.bench.di
 
 import com.lockpicking.bench.data.AssetLockAssetRepository
+import com.lockpicking.bench.data.BenchPrefs
 import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.PrefsGameRecords
+import com.lockpicking.bench.data.SharedPrefsBenchPrefs
 import com.lockpicking.bench.data.SystemGameClock
 import com.lockpicking.bench.domain.game.GameClock
 import com.lockpicking.bench.ui.bench.LockBenchViewModel
@@ -22,5 +24,6 @@ val appModule = module {
   single<LockAssetRepository> { AssetLockAssetRepository(androidContext().assets, get(IoDispatcher)) }
   single<GameRecords> { PrefsGameRecords(androidContext()) }
   single<GameClock> { SystemGameClock }
+  single<BenchPrefs> { SharedPrefsBenchPrefs(androidContext()) }
   viewModelOf(::LockBenchViewModel)
 }
