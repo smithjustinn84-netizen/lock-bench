@@ -18,11 +18,7 @@
     <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$private fun refreshPlug(pusher: Int = -1)</ID>
     <ID>CyclomaticComplexMethod:LockSoundEngine.kt$LockSoundEngine$fun play(sound: LockSound, strength: Float)</ID>
     <ID>CyclomaticComplexMethod:OpenChoreography.kt$OpenChoreography$fun advance(dt: Float, lock: LockMechanics): Boolean</ID>
-    <ID>CyclomaticComplexMethod:PickPad.kt$private fun DrawScope.drawPinStack( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
     <ID>LongMethod:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
-    <ID>LongMethod:PickPad.kt$private fun DrawScope.drawPinStack( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
-    <ID>LongParameterList:PickPad.kt$( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
-    <ID>LongParameterList:PickPad.kt$(tipZ: Float, tipY: Float, geometry: LockGeometry, keyway: Keyway, rake: RakeProfile, scale: StackScale)</ID>
     <ID>LoopWithTooManyJumpStatements:BenchSimulation.kt$BenchSimulation$for</ID>
     <ID>MagicNumber:BenchSimulation.kt$BenchSimulation.Companion$3f</ID>
     <ID>MagicNumber:CubicBezier.kt$CubicBezier$3f</ID>

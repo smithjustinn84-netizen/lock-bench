@@ -1,7 +1,7 @@
 package com.lockpicking.bench.ui.components
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -9,9 +9,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
+import androidx.compose.runtime.IntState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -60,12 +61,12 @@ private const val DIAL_SWEEP_DEGREES = 110f
  * pull is measured from where it lands. This draws the lever and takes no touches. Touches
  * fall through to the 3D view, whose router knows where the zone is: that is the only way a
  * thumb here and a thumb on the pick pad can be down at the same time. [torque] and [plugDegrees] are read in the draw phase, keyed on
- * [motionTick], so a moving wrench repaints this canvas without recomposing anything.
+ * [motionTick], so a moving wrench repaints this gauge without recomposing anything.
  */
 @Composable
 fun TensionLever(
   band: TorqueBand,
-  motionTick: State<Int>,
+  motionTick: IntState,
   torque: () -> Float,
   plugDegrees: () -> Float,
   modifier: Modifier = Modifier,
@@ -82,16 +83,21 @@ fun TensionLever(
   Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
     Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 8.dp).width(GaugeWidth)) {
       Text(stringResource(R.string.wrench_title), style = BenchType.Label, color = BenchColors.Dim)
-      Canvas(
+      Spacer(
         Modifier
           .fillMaxWidth()
           .height(WrenchThrowLength + SlideHeight + 8.dp)
-          .padding(top = 6.dp),
-      ) {
-        motionTick.value // read here so the wrench moving invalidates the draw, not the composition
-        drawTrack(torque(), showZones, seizeAt)
-        drawDial(abs(plugDegrees()), showSetTicks)
-      }
+          .padding(top = 6.dp)
+          .drawWithCache {
+            val dialStroke = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round)
+            onDrawBehind {
+              // Read here so the wrench moving repaints the gauge, not the composition.
+              motionTick.intValue
+              drawTrack(torque(), showZones, seizeAt)
+              drawDial(abs(plugDegrees()), showSetTicks, dialStroke)
+            }
+          },
+      )
       Text(
         if (showZones) stringResource(band.label) else "",
         style = BenchType.Label,
@@ -131,9 +137,11 @@ private fun DrawScope.drawTrack(torque: Float, showZones: Boolean, seizeAt: Floa
     zone(y(LockMechanics.T_BIND), y(LockMechanics.T_EASED), width, BenchColors.Set.copy(alpha = 0.22f))
     zone(y(LockMechanics.T_EASED), y(LockMechanics.T_SPOOL_BLOCK), width, BenchColors.Brass.copy(alpha = 0.14f))
     zone(y(seizeAt), y(1f) + slide / 2f, width, BenchColors.Fault.copy(alpha = 0.22f))
-    for (mark in floatArrayOf(LockMechanics.T_BIND, LockMechanics.T_EASED, LockMechanics.T_SPOOL_BLOCK, seizeAt)) {
-      drawLine(BenchColors.Hairline, Offset(0f, y(mark)), Offset(width + 5.dp.toPx(), y(mark)), strokeWidth = 1.dp.toPx())
-    }
+    fun mark(t: Float) = drawLine(BenchColors.Hairline, Offset(0f, y(t)), Offset(width + 5.dp.toPx(), y(t)), strokeWidth = 1.dp.toPx())
+    mark(LockMechanics.T_BIND)
+    mark(LockMechanics.T_EASED)
+    mark(LockMechanics.T_SPOOL_BLOCK)
+    mark(seizeAt)
   }
 
   val at = y(torque)
@@ -159,7 +167,7 @@ private fun DrawScope.zone(from: Float, to: Float, width: Float, color: Color) {
 }
 
 /** The plug as a needle: straight up at rest, round to the right as the plug turns. */
-private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean) {
+private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean, arcStroke: Stroke) {
   val radius = 34.dp.toPx()
   val pivot = Offset(TrackWidth.toPx() + 14.dp.toPx(), radius + 6.dp.toPx())
   fun at(degrees: Float, r: Float): Offset {
@@ -174,7 +182,7 @@ private fun DrawScope.drawDial(plugDegrees: Float, showTicks: Boolean) {
     useCenter = false,
     topLeft = Offset(pivot.x - radius, pivot.y - radius),
     size = Size(radius * 2f, radius * 2f),
-    style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round),
+    style = arcStroke,
   )
   // One tick per set; anything the needle shows beyond the last of them is not a real set.
   var tick = if (showTicks) 0f else Float.MAX_VALUE

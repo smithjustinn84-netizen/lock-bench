@@ -18,8 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.IntState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,13 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toRect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -126,12 +127,19 @@ private class TouchLayout(private val router: BenchTouchRouter) {
   }
 }
 
+/**
+ * Hears where this node lands, in window pixels, after every layout that moves it. Not
+ * debounced: the touch router has to know where a thumb zone is the moment the hands swap.
+ */
+fun Modifier.reportBounds(onBounds: (Rect) -> Unit): Modifier =
+  onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) { onBounds(it.boundsInWindow.toRect()) }
+
 /** Wires the bench screen to its [LockBenchViewModel]. */
 @Composable
 fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
-  // Kept as a State and read only in the draw phase of the canvases that follow it.
-  val motionTick = viewModel.motionTick.collectAsStateWithLifecycle()
+  // Snapshot state, read only in the draw phase of the canvases that follow it.
+  val motionTick = viewModel.motionTick
 
   val context = LocalContext.current
   val haptics = remember(context) { LockHaptics(context.applicationContext) }
@@ -152,11 +160,13 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
     BenchTouchHandler(BenchTouchRouter(viewModel, viewModel, ViewConfiguration.get(context).scaledTouchSlop.toFloat()))
   }
   val layout = remember(touch) { TouchLayout(touch.router) }
-  with(density) {
-    touch.router.dragRangePx = PickLiftRange.toPx()
-    // The thumb and the pick drawn on the pad move together.
-    touch.router.depthRangePx = (PickPadWidth - PickPadInset * 2).toPx()
-    touch.router.wrenchThrowPx = WrenchThrowLength.toPx()
+  SideEffect(touch, density) {
+    with(density) {
+      touch.router.dragRangePx = PickLiftRange.toPx()
+      // The thumb and the pick drawn on the pad move together.
+      touch.router.depthRangePx = (PickPadWidth - PickPadInset * 2).toPx()
+      touch.router.wrenchThrowPx = WrenchThrowLength.toPx()
+    }
   }
   // Behind another app there is no hand on the wrench, and the round's clock stops.
   LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
@@ -165,7 +175,8 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
   }
   LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
   // Picking blind, the camera stays on the keyway: orbiting would show the cut side.
-  touch.router.cameraLocked = state.blind
+  val blind = state.blind
+  SideEffect(touch, blind) { touch.router.cameraLocked = blind }
   val meter = remember { FrameMeter() }
 
   LockBenchScreen(
@@ -229,7 +240,7 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       contentPadding = contentPadding,
       meter = meter,
       touch = touch,
-      modifier = Modifier.fillMaxSize().onGloballyPositioned { layout.place(HudPart.Scene, it.boundsInWindow()) },
+      modifier = Modifier.fillMaxSize().reportBounds { layout.place(HudPart.Scene, it) },
     )
   }
 }
@@ -244,7 +255,7 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
 @Composable
 fun LockBenchScreen(
   state: BenchUiState,
-  motionTick: State<Int>,
+  motionTick: IntState,
   pins: LockReadout?,
   torque: () -> Float,
   plugDegrees: () -> Float,
@@ -342,7 +353,7 @@ fun LockBenchScreen(
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomStart else Alignment.BottomEnd)
             .width(TensionZoneWidth)
-            .onGloballyPositioned { onPlaced(HudPart.Wrench, it.boundsInWindow()) },
+            .reportBounds { onPlaced(HudPart.Wrench, it) },
         )
         PickPad(
           geometry = geometry,
@@ -364,7 +375,7 @@ fun LockBenchScreen(
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomEnd else Alignment.BottomStart)
             .width(PickPadWidth)
-            .onGloballyPositioned { onPlaced(HudPart.Pick, it.boundsInWindow()) },
+            .reportBounds { onPlaced(HudPart.Pick, it) },
         )
       }
       // With no lock on the bench there is no pad, and no switch on it to keep touches off.
@@ -378,7 +389,7 @@ fun LockBenchScreen(
           modifier = Modifier
             .align(Alignment.BottomCenter)
             .width(ResultsWidth)
-            .onGloballyPositioned { onPlaced(HudPart.Results, it.boundsInWindow()) },
+            .reportBounds { onPlaced(HudPart.Results, it) },
         )
       }
       DisposableEffect(result != null) { onDispose { onPlaced(HudPart.Results, Rect.Zero) } }
@@ -413,7 +424,7 @@ fun LockBenchScreen(
             .align(Alignment.TopEnd)
             .padding(top = 56.dp)
             .width(DrawerWidth)
-            .onGloballyPositioned { onPlaced(HudPart.Controls, it.boundsInWindow()) },
+            .reportBounds { onPlaced(HudPart.Controls, it) },
         )
       }
       // A closed drawer is not in the way of anything.
@@ -426,7 +437,7 @@ fun LockBenchScreen(
             .padding(top = 56.dp)
             .width(GuideWidth)
             .fillMaxHeight()
-            .onGloballyPositioned { onPlaced(HudPart.Guide, it.boundsInWindow()) },
+            .reportBounds { onPlaced(HudPart.Guide, it) },
         )
       }
       DisposableEffect(guideOpen) { onDispose { onPlaced(HudPart.Guide, Rect.Zero) } }

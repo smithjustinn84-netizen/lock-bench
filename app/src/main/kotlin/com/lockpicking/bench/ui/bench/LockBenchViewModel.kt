@@ -1,5 +1,7 @@
 package com.lockpicking.bench.ui.bench
 
+import androidx.compose.runtime.IntState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lockpicking.bench.data.BenchPrefs
@@ -62,10 +64,12 @@ class LockBenchViewModel(
   private val _uiState = MutableStateFlow(BenchUiState())
   val uiState: StateFlow<BenchUiState> = _uiState.asStateFlow()
 
-  private val _motionTick = MutableStateFlow(0)
+  // Snapshot state, not a flow: it changes every frame, and the pads read it in their draw
+  // phase. A flow would box each value and resume a collector on every frame to get it there.
+  private val _motionTick = mutableIntStateOf(0)
 
   /** Changes on every frame a pin moved. Read it only where pins are drawn, in the draw phase. */
-  val motionTick: StateFlow<Int> = _motionTick.asStateFlow()
+  val motionTick: IntState get() = _motionTick
 
   private val _events = Channel<LockFeedback>(Channel.BUFFERED)
 
@@ -144,7 +148,7 @@ class LockBenchViewModel(
     round = null
     simulation = null
     lastSnapshot = null
-    _motionTick.value = 0
+    _motionTick.intValue = 0
     _uiState.update {
       BenchUiState(
         lock = lock,
@@ -462,7 +466,7 @@ class LockBenchViewModel(
 
   private fun publish() {
     val sim = simulation ?: return
-    _motionTick.value = sim.motionTick
+    _motionTick.intValue = sim.motionTick
     val snapshot = sim.snapshot()
     if (snapshot == lastSnapshot) return
     lastSnapshot = snapshot

@@ -204,10 +204,8 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
 
     // Only the pick in hand is on the bench; a model with no rake keeps showing its hook.
     val inHand = if (pose.tool == PickTool.Rake && rake != null) rake else pick
-    for (tool in listOfNotNull(pick, rake)) {
-      val shown = tool === inHand
-      if (tool.node.isVisible != shown) tool.node.isVisible = shown
-    }
+    showIfInHand(pick, inHand)
+    rake?.let { showIfInHand(it, inHand) }
     if (inHand !== appliedTool) {
       appliedTool = inHand
       appliedPickPitch = Float.NaN
@@ -247,6 +245,11 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     return WorldBox.around(
       local.corners().map { (world * Float4(it[0], it[1], it[2], 1f)).let { p -> floatArrayOf(p.x, p.y, p.z) } },
     )
+  }
+
+  private fun showIfInHand(tool: Part, inHand: Part) {
+    val shown = tool === inHand
+    if (tool.node.isVisible != shown) tool.node.isVisible = shown
   }
 
   private fun applyBodyAlpha(alpha: Float): Boolean {
