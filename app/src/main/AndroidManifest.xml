@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The lock is felt as much as seen: sets, false sets and the plug kicking back are vibration. -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -13,10 +14,13 @@
         android:supportsRtl="true"
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.LockBench">
+        <!-- Two thumbs, a wrench on one side and a pick pad on the other: the bench is laid out
+             for landscape. Large screens on Android 16+ may ignore this; phones still honour it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
+            tools:ignore="DiscouragedApi"
             android:theme="@style/Theme.LockBench.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

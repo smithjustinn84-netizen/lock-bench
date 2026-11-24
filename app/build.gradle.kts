@@ -50,7 +50,6 @@ android {
     checkDependencies = false
     // Version bumps are a separate chore; these go stale and need the network.
     disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
-    baseline = file("lint-baseline.xml")
   }
 
   packaging {

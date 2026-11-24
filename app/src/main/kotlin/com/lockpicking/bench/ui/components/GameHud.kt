@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
@@ -71,7 +72,7 @@ fun GameStatusBlock(
   val tier = stringResource(game.tier.label)
   val details = buildList {
     if (game.tier.showSetCount) add(stringResource(R.string.game_sets, setCount, pinCount))
-    add(stringResource(R.string.game_mistakes, game.mistakes))
+    add(pluralStringResource(R.plurals.game_mistakes, game.mistakes, game.mistakes))
     game.bestMillis?.let { add(stringResource(R.string.game_best, formatGameTime(it))) }
   }.joinToString("  ·  ")
   Column(modifier) {

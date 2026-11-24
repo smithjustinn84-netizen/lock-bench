@@ -28,7 +28,7 @@ private val MinTouchHeight = 48.dp
 /** A flat toggle. Filled brass when on. */
 @Composable
 fun RowScope.BenchToggle(label: String, on: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-  val state = stringResource(if (on) R.string.state_on else R.string.state_off)
+  val state = stringResource(if (on) R.string.toggle_on else R.string.toggle_off)
   Box(
     Modifier
       .weight(1f)

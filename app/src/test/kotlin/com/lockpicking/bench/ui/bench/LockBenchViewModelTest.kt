@@ -268,10 +268,10 @@ class LockBenchViewModelTest {
   fun `the motion tick advances while the torque changes`() = runTest(dispatcher) {
     val vm = bound(viewModel())
     play(0.5f)
-    val before = vm.motionTick.value
+    val before = vm.motionTick.intValue
     vm.onWrenchPulled(0.5f)
     play(0.1f)
-    assertTrue(vm.motionTick.value > before)
+    assertTrue(vm.motionTick.intValue > before)
   }
 
   @Test
@@ -349,10 +349,10 @@ class LockBenchViewModelTest {
     val vm = bound(viewModel())
     vm.dragPin(0, 0f)
     play(0.5f)
-    val before = vm.motionTick.value
+    val before = vm.motionTick.intValue
     vm.dragPin(0, 0.3f)
     play(0.1f)
-    assertTrue(vm.motionTick.value > before)
+    assertTrue(vm.motionTick.intValue > before)
   }
 
   @Test
