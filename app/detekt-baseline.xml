@@ -1,0 +1,124 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$(rake &amp;&amp; torque &lt;= T_EASED) || (held[pin] &amp;&amp; setThisPush[pin])</ID>
+    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$rake &amp;&amp; security &amp;&amp; wasBinding &amp;&amp; before &gt;= shear</ID>
+    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$rattling[i] &amp;&amp; !held[i] &amp;&amp; keyLifts[i] &lt;= 0f &amp;&amp; driverLifts[i] &lt;= driverFloor(i) + fall</ID>
+    <ID>ComplexCondition:LockMechanics.kt$LockMechanics$target &gt;= shear &amp;&amp; bindingPin == pin &amp;&amp; (alone || !security || wasBinding)</ID>
+    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$fun advance(dt: Float): Boolean</ID>
+    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$private fun pushRequestedPin(dt: Float)</ID>
+    <ID>CyclomaticComplexMethod:BenchSimulation.kt$BenchSimulation$private fun rakeStep(z: Float, want: Float, dt: Float, authority: Float)</ID>
+    <ID>CyclomaticComplexMethod:BenchTouchRouter.kt$BenchTouchRouter$fun onMove(id: Int, x: Float, y: Float): Boolean</ID>
+    <ID>CyclomaticComplexMethod:FeedbackCue.kt$fun cueFor(event: LockEvent, torque: Float): FeedbackCue</ID>
+    <ID>CyclomaticComplexMethod:LockHaptics.kt$LockHaptics$private fun pulsed(haptic: Haptic, level: Float): VibrationEffect</ID>
+    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun liftLimit(pin: Int, rake: Boolean = false): Float</ID>
+    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
+    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$fun step(dt: Float)</ID>
+    <ID>CyclomaticComplexMethod:LockMechanics.kt$LockMechanics$private fun refreshPlug(pusher: Int = -1)</ID>
+    <ID>CyclomaticComplexMethod:LockSoundEngine.kt$LockSoundEngine$fun play(sound: LockSound, strength: Float)</ID>
+    <ID>CyclomaticComplexMethod:OpenChoreography.kt$OpenChoreography$fun advance(dt: Float, lock: LockMechanics): Boolean</ID>
+    <ID>CyclomaticComplexMethod:PickPad.kt$private fun DrawScope.drawPinStack( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
+    <ID>LongMethod:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
+    <ID>LongMethod:PickPad.kt$private fun DrawScope.drawPinStack( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
+    <ID>LongParameterList:PickPad.kt$( i: Int, cx: Float, geometry: LockGeometry, pins: LockReadout, scale: StackScale, isBinding: Boolean, isSelected: Boolean, )</ID>
+    <ID>LongParameterList:PickPad.kt$(tipZ: Float, tipY: Float, geometry: LockGeometry, keyway: Keyway, rake: RakeProfile, scale: StackScale)</ID>
+    <ID>LoopWithTooManyJumpStatements:BenchSimulation.kt$BenchSimulation$for</ID>
+    <ID>MagicNumber:BenchSimulation.kt$BenchSimulation.Companion$3f</ID>
+    <ID>MagicNumber:CubicBezier.kt$CubicBezier$3f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.12f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.1f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.2f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.35f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.3f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.45f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.4f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.55f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.5f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.6f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.7f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.8f</ID>
+    <ID>MagicNumber:FeedbackCue.kt$0.9f</ID>
+    <ID>MagicNumber:GameHud.kt$10</ID>
+    <ID>MagicNumber:GameHud.kt$100</ID>
+    <ID>MagicNumber:GameHud.kt$60</ID>
+    <ID>MagicNumber:GameHud.kt$600</ID>
+    <ID>MagicNumber:GameRound.kt$GameRound$1000L</ID>
+    <ID>MagicNumber:GameRound.kt$GameRound$3</ID>
+    <ID>MagicNumber:GlbParser.kt$GlbParser$12</ID>
+    <ID>MagicNumber:GlbParser.kt$GlbParser$16</ID>
+    <ID>MagicNumber:GlbParser.kt$GlbParser$3</ID>
+    <ID>MagicNumber:GlbParser.kt$GlbParser$4</ID>
+    <ID>MagicNumber:LockBenchViewModel.kt$LockBenchViewModel$1e9f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$0.05f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$0.45f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$0.6f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$0.7f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$0.8f</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$100</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$110</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$12</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$16</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$18</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$20</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$22</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$255</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$28</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$30</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$33</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$4</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$40</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$44</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$5</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$6</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$60</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$7</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$70</ID>
+    <ID>MagicNumber:LockHaptics.kt$LockHaptics$9</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.02f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.15f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.20f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.25f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.6f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.85f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$0.995f</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig$3</ID>
+    <ID>MagicNumber:LockRig.kt$LockRig.Companion$3f</ID>
+    <ID>MagicNumber:LockSoundEngine.kt$LockSoundEngine$0.15f</ID>
+    <ID>MagicNumber:LockSoundEngine.kt$LockSoundEngine$0.5f</ID>
+    <ID>MagicNumber:LockSoundEngine.kt$LockSoundEngine$0.6f</ID>
+    <ID>MagicNumber:MainActivity.kt$MainActivity$220L</ID>
+    <ID>MagicNumber:PickPad.kt$0.012f</ID>
+    <ID>MagicNumber:PickPad.kt$0.014f</ID>
+    <ID>MagicNumber:PickPad.kt$0.02f</ID>
+    <ID>MagicNumber:PickPad.kt$0.032f</ID>
+    <ID>MagicNumber:PickPad.kt$0.16f</ID>
+    <ID>MagicNumber:PickPad.kt$0.18f</ID>
+    <ID>MagicNumber:PickPad.kt$0.1f</ID>
+    <ID>MagicNumber:PickPad.kt$0.22f</ID>
+    <ID>MagicNumber:PickPad.kt$0.2f</ID>
+    <ID>MagicNumber:PickPad.kt$0.36f</ID>
+    <ID>MagicNumber:PickPad.kt$0.5f</ID>
+    <ID>MagicNumber:PickPad.kt$12f</ID>
+    <ID>MagicNumber:PickPad.kt$4f</ID>
+    <ID>MagicNumber:PickPad.kt$6</ID>
+    <ID>MagicNumber:SpringValue.kt$SpringValue$20f</ID>
+    <ID>MagicNumber:TensionLever.kt$8.0</ID>
+    <ID>MagicNumber:WorldBox.kt$WorldBox$4</ID>
+    <ID>MagicNumber:WorldBox.kt$WorldBox$8</ID>
+    <ID>MagicNumber:WorldBox.kt$WorldBox.Companion$3</ID>
+    <ID>MaxLineLength:BenchScene.kt$*</ID>
+    <ID>MaxLineLength:BenchUiState.kt$if (geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)</ID>
+    <ID>MaxLineLength:FeedbackCue.kt$LockSound$enum</ID>
+    <ID>MaxLineLength:FeedbackTest.kt$FeedbackTest$assertTrue(listOf(LockEvent.PinSet(0, 1), LockEvent.WardHit, LockEvent.PinTouched(0, PinFeel.Binding)).none { cueFor(it, 0.4f).haptic!!.isTexture })</ID>
+    <ID>MaxLineLength:LockBenchViewModelTest.kt$LockBenchViewModelTest$vm.onPickMoved(if (stroke &lt; 0.5f) stroke * 2f else 2f - stroke * 2f, 0.4f + 0.4f * (if (wander &lt; 0.5f) wander * 2f else 2f - wander * 2f))</ID>
+    <ID>MaxLineLength:LockMechanicsTest.kt$LockMechanicsTest$assertEquals("one for each spool: with one left the plug drops straight back into its waist", 2, events.count { it is LockEvent.FalseSet })</ID>
+    <ID>MaxLineLength:RakeTest.kt$RakeTest$assertTrue("order $order", american1100Geometry.pinSpecs.indices.none { sim.readout.state(it) == PinState.Set &amp;&amp; american1100Geometry.pinSpecs[it].serrated })</ID>
+    <ID>ReturnCount:LockMechanics.kt$LockMechanics$fun liftLimit(pin: Int, rake: Boolean = false): Float</ID>
+    <ID>ReturnCount:LockMechanics.kt$LockMechanics$fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f)</ID>
+    <ID>TooGenericExceptionCaught:LockBenchViewModel.kt$LockBenchViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:BenchSimulation.kt$BenchSimulation</ID>
+    <ID>TooManyFunctions:LockBenchViewModel.kt$LockBenchViewModel : ViewModelPickInputWrenchInputBenchSceneHost</ID>
+    <ID>TooManyFunctions:LockMechanics.kt$LockMechanics : LockReadout</ID>
+  </CurrentIssues>
+</SmellBaseline>

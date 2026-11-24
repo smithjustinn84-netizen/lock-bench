@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 9.5.2" type="baseline" client="gradle" dependencies="false" name="AGP (9.5.2)" variant="all" version="9.5.2">
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="    android:width=&quot;288dp&quot;"
+        errorLine2="                   ~~~~~">
+        <location
+            file="src/main/res/drawable/ic_splash_logo.xml"
+            line="4"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="Overriding `@string/state_on` which is marked as private in androidx.compose.ui:ui-android:1.12.1. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;state_on&quot;>On&lt;/string>"
+        errorLine2="                  ~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="33"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="Overriding `@string/state_off` which is marked as private in androidx.compose.ui:ui-android:1.12.1. If deliberate, use tools:override=&quot;true&quot;, otherwise pick a different name."
+        errorLine1="    &lt;string name=&quot;state_off&quot;>Off&lt;/string>"
+        errorLine2="                  ~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="34"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="RememberReturnType"
+        message="`remember` calls must not return `Unit`"
+        errorLine1="  remember(renderer) {"
+        errorLine2="  ~~~~~~~~">
+        <location
+            file="src/main/kotlin/com/lockpicking/bench/ui/bench/scene/BenchScene.kt"
+            line="79"
+            column="3"/>
+    </issue>
+
+    <issue
+        id="RememberReturnType"
+        message="`remember` calls must not return `Unit`"
+        errorLine1="  remember(keyLight) {"
+        errorLine2="  ~~~~~~~~">
+        <location
+            file="src/main/kotlin/com/lockpicking/bench/ui/bench/scene/BenchScene.kt"
+            line="97"
+            column="3"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Fixed screen orientations will be ignored in most cases, starting from Android 16. Android is moving toward a model where apps are expected to adapt to various orientations, display sizes, and aspect ratios."
+        errorLine1="            android:screenOrientation=&quot;sensorLandscape&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;and&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;status_ease_off_hint&quot;>Keep the pick on pin %1$d and ease the wrench. The plug has to turn back.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="16"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;has&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;status_caught_hint&quot;>A serration on pin %1$d has caught. It is not set: ease the wrench and keep lifting.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="18"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;set&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;game_sets&quot;>%1$d/%2$d set&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="49"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;mistakes&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;game_mistakes&quot;>%1$d mistakes&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="50"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;dropped&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;game_breakdown&quot;>%1$d dropped · %2$d overset · %3$d seized&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="57"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 28. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.xml.backup_rules` appears to be unused"
+        errorLine1="&lt;full-backup-content>"
+        errorLine2="^">
+        <location
+            file="src/main/res/xml/backup_rules.xml"
+            line="8"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.xml.data_extraction_rules` appears to be unused"
+        errorLine1="&lt;data-extraction-rules>"
+        errorLine2="^">
+        <location
+            file="src/main/res/xml/data_extraction_rules.xml"
+            line="6"
+            column="1"/>
+    </issue>
+
+</issues>

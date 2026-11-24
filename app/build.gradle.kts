@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.detekt)
 }
 
 android {
@@ -35,6 +36,14 @@ android {
     noCompress += listOf("glb", "hdr")
   }
 
+  lint {
+    abortOnError = true
+    checkDependencies = false
+    // Version bumps are a separate chore; these go stale and need the network.
+    disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
+    baseline = file("lint-baseline.xml")
+  }
+
   packaging {
     resources {
       excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -44,6 +53,24 @@ android {
 
 kotlin {
   jvmToolchain(17)
+}
+
+detekt {
+  buildUponDefaultConfig = true
+  config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+  baseline = file("detekt-baseline.xml")
+  source.setFrom("src/main/kotlin", "src/test/kotlin")
+}
+
+// detekt 1.23 is built against Kotlin 2.0; keep its own compiler off the project's newer one.
+configurations.matching { it.name == "detekt" }.configureEach {
+  resolutionStrategy.eachDependency {
+    if (requested.group == "org.jetbrains.kotlin") useVersion("2.0.21")
+  }
+}
+
+tasks.named("check") {
+  dependsOn("detekt", ":spotlessCheck")
 }
 
 dependencies {

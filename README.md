@@ -168,6 +168,20 @@ Run the unit tests:
 ./gradlew test
 ```
 
+Run every check (ktlint via Spotless, detekt, Android Lint and the unit tests):
+
+```bash
+./gradlew check
+```
+
+Fix formatting in place:
+
+```bash
+./gradlew spotlessApply
+```
+
+ktlint rules live in the root `build.gradle.kts` (mirrored in `.editorconfig` for the IDE) and detekt's in `config/detekt/detekt.yml`. Findings that predate the tools are recorded in `app/detekt-baseline.xml` and `app/lint-baseline.xml`; new code must pass clean.
+
 ### Regenerating the assets
 
 The models and the lighting are generated from scripts, so you can change them in code. This builds every lock; name one after `--` (`trainer`, `master3` or `american1100`) to build just that one:
