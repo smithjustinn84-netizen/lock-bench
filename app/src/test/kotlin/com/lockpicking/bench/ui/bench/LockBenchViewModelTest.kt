@@ -59,8 +59,8 @@ class LockBenchViewModelTest {
 
   private class FakeRecords : GameRecords {
     val best = mutableMapOf<Pair<LockModel, GameTier>, Long>()
-    override fun bestMillis(lock: LockModel, tier: GameTier): Long? = best[lock to tier]
-    override fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
+    override suspend fun bestMillis(lock: LockModel, tier: GameTier): Long? = best[lock to tier]
+    override suspend fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
       best[lock to tier] = millis
     }
   }
@@ -68,8 +68,8 @@ class LockBenchViewModelTest {
   private val records = FakeRecords()
 
   private class FakePrefs(var lock: LockModel? = null) : BenchPrefs {
-    override fun lastLock(): LockModel? = lock
-    override fun saveLastLock(lock: LockModel) {
+    override suspend fun lastLock(): LockModel? = lock
+    override suspend fun saveLastLock(lock: LockModel) {
       this.lock = lock
     }
   }
@@ -81,9 +81,13 @@ class LockBenchViewModelTest {
 
   private var repository = FakeRepository { modelInfo }
 
-  private fun viewModel(result: () -> GlbInfo = { modelInfo }): LockBenchViewModel {
+  /**
+   * A view model that has read back its saved lock, as it has by the time the splash screen
+   * lifts. Pass [restore] false to look at it before that read has run.
+   */
+  private fun viewModel(restore: Boolean = true, result: () -> GlbInfo = { modelInfo }): LockBenchViewModel {
     repository = FakeRepository(result)
-    return LockBenchViewModel(repository, records, clock, prefs)
+    return LockBenchViewModel(repository, records, clock, prefs).also { if (restore) dispatcher.scheduler.runCurrent() }
   }
 
   /** A 60 fps display on the test scheduler's virtual clock. */
@@ -150,7 +154,8 @@ class LockBenchViewModelTest {
 
   @Test
   fun `loads the model info off the screen`() = runTest(dispatcher) {
-    val vm = viewModel()
+    val vm = viewModel(restore = false)
+    assertFalse(vm.uiState.value.restored)
     assertNull(vm.uiState.value.modelInfo)
     advanceUntilIdle()
     assertSame(modelInfo, vm.uiState.value.modelInfo)
@@ -489,12 +494,34 @@ class LockBenchViewModelTest {
   fun `the chosen lock is remembered for the next launch`() = runTest(dispatcher) {
     val vm = bound(viewModel())
     vm.onLockSelected(LockModel.Master3)
+    advanceUntilIdle()
     assertEquals(LockModel.Master3, prefs.lock)
 
-    val next = viewModel()
-    assertEquals(LockModel.Master3, next.uiState.value.lock)
+    // Nothing is loaded until the saved lock is read back: the trainer never shows first.
+    val next = viewModel(restore = false)
+    assertTrue(repository.asked.isEmpty())
     advanceUntilIdle()
+    assertTrue(next.uiState.value.restored)
+    assertEquals(LockModel.Master3, next.uiState.value.lock)
     assertEquals(listOf(LockModel.Master3), repository.asked)
+  }
+
+  @Test
+  fun `a lock cannot be chosen before the saved one is read back`() = runTest(dispatcher) {
+    prefs.lock = LockModel.American1100
+    val vm = viewModel(restore = false)
+    vm.onLockSelected(LockModel.Master3)
+    advanceUntilIdle()
+    assertEquals(LockModel.American1100, vm.uiState.value.lock)
+  }
+
+  @Test
+  fun `a blind round shows the best time kept from before`() = runTest(dispatcher) {
+    records.best[LockModel.Trainer to GameTier.Apprentice] = 42_000L
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    advanceTimeBy(1)
+    assertEquals(42_000L, vm.uiState.value.game!!.bestMillis)
   }
 
   @Test
@@ -502,6 +529,7 @@ class LockBenchViewModelTest {
     val vm = bound(viewModel())
     vm.onGameStarted(GameTier.Apprentice)
     vm.onLockSelected(LockModel.Master3)
+    advanceUntilIdle()
     assertNull(prefs.lock)
   }
 

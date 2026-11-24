@@ -1,29 +1,31 @@
 package com.lockpicking.bench.data
 
-import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lockpicking.bench.domain.model.LockModel
+import kotlinx.coroutines.flow.first
 
 /** Bench choices kept between launches. */
 interface BenchPrefs {
   /** The lock last put on the bench, or null if none was ever chosen (or it has since gone). */
-  fun lastLock(): LockModel?
+  suspend fun lastLock(): LockModel?
 
-  fun saveLastLock(lock: LockModel)
+  suspend fun saveLastLock(lock: LockModel)
 }
 
-class SharedPrefsBenchPrefs(context: Context) : BenchPrefs {
-  private val prefs = context.getSharedPreferences("bench_prefs", Context.MODE_PRIVATE)
-
-  override fun lastLock(): LockModel? {
-    val id = prefs.getString(KEY_LOCK, null) ?: return null
+class DataStoreBenchPrefs(private val store: DataStore<Preferences>) : BenchPrefs {
+  override suspend fun lastLock(): LockModel? {
+    val id = store.data.first()[LAST_LOCK] ?: return null
     return LockModel.entries.firstOrNull { it.id == id }
   }
 
-  override fun saveLastLock(lock: LockModel) {
-    prefs.edit().putString(KEY_LOCK, lock.id).apply()
+  override suspend fun saveLastLock(lock: LockModel) {
+    store.edit { it[LAST_LOCK] = lock.id }
   }
 
   private companion object {
-    const val KEY_LOCK = "last_lock"
+    val LAST_LOCK = stringPreferencesKey("last_lock")
   }
 }

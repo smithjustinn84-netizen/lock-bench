@@ -11,12 +11,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.lockpicking.bench.ui.bench.LockBenchRoute
+import com.lockpicking.bench.ui.bench.LockBenchViewModel
 import com.lockpicking.bench.ui.theme.BenchTheme
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : ComponentActivity() {
+  /** The same view model the bench screen gets: the activity is its owner. */
+  private val bench: LockBenchViewModel by viewModel()
+
   override fun onCreate(savedInstanceState: Bundle?) {
     val splashScreen = installSplashScreen()
     super.onCreate(savedInstanceState)
+    // Hold the splash until the bench knows which lock to open on.
+    splashScreen.setKeepOnScreenCondition { !bench.uiState.value.restored }
 
     splashScreen.setOnExitAnimationListener { splashView ->
       splashView.view.animate()

@@ -14,6 +14,8 @@ import com.lockpicking.bench.domain.model.LockModel
 data class BenchUiState(
   /** Which padlock is on the bench. */
   val lock: LockModel = LockModel.Trainer,
+  /** Whether [lock] is the one saved from last time yet. Until it is, there is nothing to show. */
+  val restored: Boolean = false,
   /** Mesh stats of [lock]'s model file, once read. Null while a lock is being swapped in. */
   val modelInfo: GlbInfo? = null,
   /** The lock's dimensions, once the 3D model has bound. Null until then. */

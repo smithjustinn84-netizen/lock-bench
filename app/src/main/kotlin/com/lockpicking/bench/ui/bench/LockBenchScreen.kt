@@ -210,7 +210,8 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
     gameElapsedMillis = viewModel::gameElapsedMillis,
     onPlaced = layout::place,
   ) { contentPadding ->
-    BenchScene(
+    // Until the saved lock is known the splash screen is still up: load nothing.
+    if (state.restored) BenchScene(
       host = viewModel,
       lock = state.lock,
       modelInfo = state.modelInfo,

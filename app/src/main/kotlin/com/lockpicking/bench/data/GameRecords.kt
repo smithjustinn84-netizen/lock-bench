@@ -1,32 +1,38 @@
 package com.lockpicking.bench.data
 
-import android.content.Context
 import android.os.SystemClock
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import com.lockpicking.bench.domain.game.GameClock
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.model.LockModel
+import kotlinx.coroutines.flow.first
 
 /** Best times per lock and tier, kept between launches. */
 interface GameRecords {
-  fun bestMillis(lock: LockModel, tier: GameTier): Long?
+  suspend fun bestMillis(lock: LockModel, tier: GameTier): Long?
 
-  fun saveBest(lock: LockModel, tier: GameTier, millis: Long)
+  /** Records [millis] unless a faster time is already kept. */
+  suspend fun saveBest(lock: LockModel, tier: GameTier, millis: Long)
 }
 
-/** A handful of numbers: SharedPreferences is plenty. */
-class PrefsGameRecords(context: Context) : GameRecords {
-  private val prefs = context.getSharedPreferences("game_records", Context.MODE_PRIVATE)
+class DataStoreGameRecords(private val store: DataStore<Preferences>) : GameRecords {
+  override suspend fun bestMillis(lock: LockModel, tier: GameTier): Long? = store.data.first()[key(lock, tier)]
 
-  override fun bestMillis(lock: LockModel, tier: GameTier): Long? = prefs.getLong(key(lock, tier), -1L).takeIf { it >= 0L }
-
-  override fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
-    prefs.edit().putLong(key(lock, tier), millis).apply()
+  override suspend fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
+    val key = key(lock, tier)
+    store.edit { prefs ->
+      val kept = prefs[key]
+      if (kept == null || millis < kept) prefs[key] = millis
+    }
   }
 
   /** The trainer keeps the keys it had when it was the only lock, so its records carry over. */
-  private fun key(lock: LockModel, tier: GameTier): String {
+  private fun key(lock: LockModel, tier: GameTier): Preferences.Key<Long> {
     val tierName = tier.name.lowercase()
-    return if (lock == LockModel.Trainer) "best_$tierName" else "best_${lock.id}_$tierName"
+    return longPreferencesKey(if (lock == LockModel.Trainer) "best_$tierName" else "best_${lock.id}_$tierName")
   }
 }
 

@@ -58,8 +58,7 @@ class LockBenchViewModel(
   private val prefs: BenchPrefs,
 ) : ViewModel(), PickInput, WrenchInput, BenchSceneHost {
 
-  /** The bench opens on the lock it was left with. */
-  private val _uiState = MutableStateFlow(BenchUiState(lock = prefs.lastLock() ?: LockModel.Trainer))
+  private val _uiState = MutableStateFlow(BenchUiState())
   val uiState: StateFlow<BenchUiState> = _uiState.asStateFlow()
 
   private val _motionTick = MutableStateFlow(0)
@@ -99,7 +98,13 @@ class LockBenchViewModel(
   private var infoLoad: Job? = null
 
   init {
-    loadModelInfo(_uiState.value.lock)
+    // The bench opens on the lock it was left with. Nothing loads until that is known, so the
+    // trainer never flashes up first.
+    viewModelScope.launch {
+      val lock = prefs.lastLock() ?: LockModel.Trainer
+      _uiState.update { it.copy(lock = lock, restored = true) }
+      loadModelInfo(lock)
+    }
   }
 
   private fun loadModelInfo(lock: LockModel) {
@@ -123,7 +128,7 @@ class LockBenchViewModel(
    * round is being picked: that lock has to be opened or given up first.
    */
   fun onLockSelected(lock: LockModel) {
-    if (picking() || lock == _uiState.value.lock) return
+    if (!_uiState.value.restored || picking() || lock == _uiState.value.lock) return
     val hints = if (_uiState.value.game != null) sandboxHints else _uiState.value.hints
     round = null
     simulation = null
@@ -138,9 +143,10 @@ class LockBenchViewModel(
         swapHands = it.swapHands,
         preset = if (it.game != null) CameraPreset.ShearSide else it.preset,
         presetResetKey = it.presetResetKey + 1,
+        restored = true,
       )
     }
-    prefs.saveLastLock(lock)
+    viewModelScope.launch { prefs.saveLastLock(lock) }
     loadModelInfo(lock)
   }
 
@@ -334,7 +340,7 @@ class LockBenchViewModel(
     sim.deal(next.bindingOrder, tier.seizeAt)
     _uiState.update {
       it.copy(
-        game = GameUiState(tier = tier, lockNumber = lockNumber, bestMillis = records.bestMillis(lock, tier)),
+        game = GameUiState(tier = tier, lockNumber = lockNumber, bestMillis = null),
         hints = false,
         ghost = false,
         explode = 0f,
@@ -345,6 +351,12 @@ class LockBenchViewModel(
     }
     publish()
     wake()
+    // The best time comes off disk a moment later; it only matters once the round is scored.
+    viewModelScope.launch {
+      val best = records.bestMillis(lock, tier) ?: return@launch
+      if (round !== next) return@launch
+      _uiState.update { state -> state.copy(game = state.game?.takeIf { it.result == null }?.copy(bestMillis = best) ?: state.game) }
+    }
   }
 
   private fun scoreEvent(event: LockEvent) {
@@ -352,11 +364,13 @@ class LockBenchViewModel(
     val before = current.mistakes
     if (current.onEvent(event, clock.nowMillis())) {
       val lock = _uiState.value.lock
-      val result = current.result(records.bestMillis(lock, current.tier))
-      if (result.newBest) records.saveBest(lock, current.tier, result.timeMillis)
+      val previousBest = _uiState.value.game?.bestMillis
+      val result = current.result(previousBest)
+      if (result.newBest) viewModelScope.launch { records.saveBest(lock, current.tier, result.timeMillis) }
+      val best = if (result.newBest) result.timeMillis else previousBest
       _uiState.update {
         it.copy(
-          game = it.game?.copy(result = result, mistakes = result.mistakes, bestMillis = records.bestMillis(lock, current.tier)),
+          game = it.game?.copy(result = result, mistakes = result.mistakes, bestMillis = best),
           // The reveal: round to the cut side, to see what you felt.
           preset = CameraPreset.ShearSide,
           presetResetKey = it.presetResetKey + 1,
