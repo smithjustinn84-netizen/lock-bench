@@ -13,13 +13,13 @@ import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
+import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.motion.FrameClock
-import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.testing.american1100Geometry
 import com.lockpicking.bench.testing.master3Geometry
-import com.lockpicking.bench.testing.trainerGeometry
 import com.lockpicking.bench.testing.testGeometry
+import com.lockpicking.bench.testing.trainerGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job

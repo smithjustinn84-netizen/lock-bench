@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
-import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.game.GameResult
+import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.ui.bench.GameUiState
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType

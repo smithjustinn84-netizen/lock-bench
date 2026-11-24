@@ -197,12 +197,16 @@ class LockMechanics(
    */
   fun liftRate(pin: Int, wedge: Boolean = false, authority: Float = 1f): Float = when {
     pinStates[pin] != PinState.Resting -> LIFT_RATE_FREE
+
     // Turning the plug back takes a steady push: a blade that is sliding has none to give.
     turningPlugBack(pin) -> LIFT_RATE_SHOULDER * authority
+
     onGrooveLip(pin) -> LIFT_RATE_GROOVE * max(GROOVE_RATE_FLOOR, 1f - torque / T_SERRATION) * authority
+
     bindingPin == pin ->
       if (wedge) WEDGE_RATE_LIGHT + (WEDGE_RATE_HEAVY - WEDGE_RATE_LIGHT) * load()
       else LIFT_RATE_LIGHT + (LIFT_RATE_HEAVY - LIFT_RATE_LIGHT) * load()
+
     else -> LIFT_RATE_FREE
   }
 
@@ -347,6 +351,7 @@ class LockMechanics(
         noteHardStop(pin, wanted, keyLifts[pin])
         return
       }
+
       PinState.Set -> {
         if (rake && torque <= T_EASED) {
           // The plug gives: the key pin rides the peak up and comes back down with it.
@@ -374,6 +379,7 @@ class LockMechanics(
         }
         return
       }
+
       PinState.Resting -> Unit
     }
 
@@ -648,8 +654,10 @@ class LockMechanics(
   private fun driverFloor(i: Int): Float {
     val ledge = when {
       pinStates[i] == PinState.Set -> pins[i].liftToShear
+
       pins[i].spool && falseSetDepth > 0f && pinStates[i] == PinState.Resting ->
         pins[i].liftToShear - (driverLength - SPOOL_FLANGE - falseSetDepth * SPOOL_SHOULDER)
+
       else -> 0f
     }
     return max(keyLifts[i], ledge)

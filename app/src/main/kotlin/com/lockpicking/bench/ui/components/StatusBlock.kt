@@ -26,36 +26,43 @@ fun StatusBlock(status: BenchStatus, swapHands: Boolean, modifier: Modifier = Mo
       hint = stringResource(R.string.status_open_hint)
       tint = BenchColors.Set
     }
+
     is BenchStatus.Overset -> {
       headline = stringResource(R.string.status_overset, status.pinNumber)
       hint = stringResource(R.string.status_overset_hint)
       tint = BenchColors.Fault
     }
+
     BenchStatus.Locked -> {
       headline = stringResource(R.string.status_locked)
       hint = stringResource(if (swapHands) R.string.status_locked_hint_swapped else R.string.status_locked_hint)
       tint = BenchColors.Text
     }
+
     BenchStatus.Seized -> {
       headline = stringResource(R.string.status_seized)
       hint = stringResource(R.string.status_seized_hint)
       tint = BenchColors.Fault
     }
+
     is BenchStatus.EaseOff -> {
       headline = stringResource(R.string.status_ease_off)
       hint = stringResource(R.string.status_ease_off_hint, status.pinNumber)
       tint = BenchColors.Fault
     }
+
     is BenchStatus.Caught -> {
       headline = stringResource(R.string.status_caught)
       hint = stringResource(R.string.status_caught_hint, status.pinNumber)
       tint = BenchColors.Fault
     }
+
     is BenchStatus.FalseSet -> {
       headline = stringResource(R.string.status_false_set)
       hint = stringResource(R.string.status_false_set_hint, status.pinNumber)
       tint = BenchColors.Brass
     }
+
     is BenchStatus.Picking -> {
       headline = stringResource(R.string.status_picking, status.setCount, status.pinCount)
       hint = status.bindingPinNumber?.let { stringResource(R.string.status_binding_hint, it) }.orEmpty()

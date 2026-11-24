@@ -61,20 +61,31 @@ class LockHaptics(context: Context) {
     val composition = VibrationEffect.startComposition()
     when (haptic) {
       Haptic.Click -> composition.addPrimitive(click, level)
+
       Haptic.Thud -> composition.addPrimitive(thud, level)
+
       Haptic.Tick -> composition.addPrimitive(tick, level)
+
       Haptic.Grain -> composition.addPrimitive(low, level)
+
       Haptic.Refuse -> composition.addPrimitive(thud, level).addPrimitive(thud, level * 0.7f, 70)
-      Haptic.Rattle -> composition
-        .addPrimitive(tick, level)
-        .addPrimitive(tick, level * 0.8f, 22)
-        .addPrimitive(tick, level * 0.6f, 33)
-        .addPrimitive(tick, level * 0.45f, 44)
+
+      Haptic.Rattle ->
+        composition
+          .addPrimitive(tick, level)
+          .addPrimitive(tick, level * 0.8f, 22)
+          .addPrimitive(tick, level * 0.6f, 33)
+          .addPrimitive(tick, level * 0.45f, 44)
+
       Haptic.Release -> composition.addPrimitive(click, level * 0.7f).addPrimitive(thud, level, 110)
+
       Haptic.Bump -> composition.addPrimitive(low, level)
+
       // The tick sharpens the front of the click: metal on metal, with no give in it.
       Haptic.Knock -> composition.addPrimitive(tick, level).addPrimitive(click, level, 0)
+
       Haptic.Scrape -> composition.addPrimitive(tick, level)
+
       Haptic.Spring -> composition.addPrimitive(low, level)
     }
     return composition.compose()

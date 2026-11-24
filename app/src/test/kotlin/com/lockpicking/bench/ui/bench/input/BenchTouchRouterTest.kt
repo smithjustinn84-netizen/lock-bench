@@ -18,12 +18,20 @@ class BenchTouchRouterTest {
       this@BenchTouchRouterTest.depth = depth.coerceIn(0f, 1f)
       calls += "pick ${"%.2f".format(depth)} ${"%.2f".format(lift)}"
     }
-    override fun onPickRested() { calls += "rest" }
-    override fun onPickTapped(across: Float) { calls += "tap ${"%.2f".format(across)}" }
+    override fun onPickRested() {
+      calls += "rest"
+    }
+    override fun onPickTapped(across: Float) {
+      calls += "tap ${"%.2f".format(across)}"
+    }
   }
   private val wrench = object : WrenchInput {
-    override fun onWrenchPulled(amount: Float) { calls += "pull ${"%.2f".format(amount)}" }
-    override fun onWrenchReleased() { calls += "wrench off" }
+    override fun onWrenchPulled(amount: Float) {
+      calls += "pull ${"%.2f".format(amount)}"
+    }
+    override fun onWrenchReleased() {
+      calls += "wrench off"
+    }
   }
 
   private val router = BenchTouchRouter(pick, wrench, touchSlop = 10f).apply {

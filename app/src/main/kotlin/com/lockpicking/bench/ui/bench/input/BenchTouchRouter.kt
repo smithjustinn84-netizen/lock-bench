@@ -105,6 +105,7 @@ class BenchTouchRouter(
     val first = owner == Owner.None
     when {
       blocked.any { it.contains(x, y) } -> Unit
+
       wrenchBounds.contains(x, y) -> if (wrenchPointer == NONE) {
         owner = Owner.Bench
         wrenchPointer = id
@@ -112,6 +113,7 @@ class BenchTouchRouter(
         wrenchAmount = 0f
         wrench.onWrenchPulled(0f)
       }
+
       pickBounds.contains(x, y) -> if (pickPointer == NONE) {
         owner = Owner.Bench
         pickPointer = id

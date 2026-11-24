@@ -106,13 +106,20 @@ sealed interface BenchStatus {
 /** With hints off the headline only counts sets: what the lock is doing is left to feel. */
 fun BenchUiState.status(): BenchStatus = when {
   opened -> BenchStatus.Open
+
   !tension -> BenchStatus.Locked
+
   !hints -> BenchStatus.Picking(setCount, pinCount, null)
+
   oversetPin >= 0 -> BenchStatus.Overset(oversetPin + 1)
+
   band == TorqueBand.Heavy -> BenchStatus.Seized
+
   blockedPin >= 0 ->
     if (geometry?.pinSpecs?.getOrNull(blockedPin)?.serrated == true) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)
+
   falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1)
+
   else -> BenchStatus.Picking(setCount, pinCount, bindingPin.takeIf { it >= 0 }?.plus(1))
 }
 

@@ -16,12 +16,16 @@ class BenchTouchHandler(val router: BenchTouchRouter) {
       val index = event.actionIndex
       router.onDown(event.getPointerId(index), event.getX(index), event.getY(index))
     }
+
     MotionEvent.ACTION_MOVE -> {
       for (index in 0 until event.pointerCount) router.onMove(event.getPointerId(index), event.getX(index), event.getY(index))
       router.consumesGesture
     }
+
     MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> router.onUp(event.getPointerId(event.actionIndex))
+
     MotionEvent.ACTION_CANCEL -> router.onCancel()
+
     else -> router.consumesGesture
   }
 }

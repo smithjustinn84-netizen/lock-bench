@@ -117,27 +117,40 @@ class LockSoundEngine(
   fun play(sound: LockSound, strength: Float) {
     when (sound) {
       LockSound.SetClick -> play(LockSfx.PinSet, strength)
+
       LockSound.FalseSetClunk -> play(LockSfx.SerratedClick, strength)
+
       LockSound.CounterTick -> play(LockSfx.SpoolCounterRotate, strength)
+
       LockSound.Blocked -> play(LockSfx.CoreTensionCreak, strength)
+
       LockSound.Grit -> play(LockSfx.PinSlide, strength)
+
       LockSound.Jam -> play(LockSfx.PinOvershoot, strength)
+
       LockSound.SlipBack -> play(LockSfx.PinTouch, strength)
+
       LockSound.Rattle -> {
         // The drivers land one after another, each a little quieter than the last.
         for ((k, at) in RATTLE_MS.withIndex()) {
           after(at) { play(LockSfx.PinTouch, strength * (1f - 0.15f * k)) }
         }
       }
+
       LockSound.Open -> {
         // The shackle lets go as the plug reaches its stop, near the end of the turn.
         play(LockSfx.PlugTurnOpen, strength, jitter = false)
         after(SHACKLE_AFTER_TURN_MS) { play(LockSfx.ShacklePop, strength, jitter = false) }
       }
+
       LockSound.Relock -> play(LockSfx.PadlockReset, strength)
+
       LockSound.Touch -> play(LockSfx.PinTouch, strength * 0.6f)
+
       LockSound.Knock -> play(LockSfx.PinOvershoot, strength * 0.5f)
+
       LockSound.Scrape -> play(LockSfx.PinSlide, strength * 0.5f)
+
       LockSound.Creak -> play(LockSfx.CoreTensionCreak, strength * 0.6f)
     }
   }

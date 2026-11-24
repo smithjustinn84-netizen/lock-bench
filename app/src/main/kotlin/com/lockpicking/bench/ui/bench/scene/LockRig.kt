@@ -58,7 +58,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
      */
     fun offset(x: Float = 0f, y: Float = 0f, z: Float = 0f) {
       if (abs(x - dx) < EPS && abs(y - dy) < EPS && abs(z - dz) < EPS) return
-      dx = x; dy = y; dz = z
+      dx = x
+      dy = y
+      dz = z
       node.position = Position(rest.x + x, rest.y + y, rest.z + z)
     }
 

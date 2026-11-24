@@ -532,6 +532,7 @@ class BenchSimulation(
         setPulse++
         if (event.pin == tipPin) setOrigin = requestedLift
       }
+
       LockEvent.Opened -> {
         setPulse++
         nudgeScript.cancel()
@@ -540,6 +541,7 @@ class BenchSimulation(
         wrenchHeld = false
         torqueTarget = 0f
       }
+
       else -> Unit
     }
     onEvent(event)

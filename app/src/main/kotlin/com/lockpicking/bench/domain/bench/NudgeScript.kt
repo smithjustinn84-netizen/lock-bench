@@ -47,6 +47,7 @@ internal class NudgeScript {
         }
         0f
       }
+
       Phase.Lift -> {
         elapsed += dt
         val t = (elapsed / LIFT_SECONDS).coerceAtMost(1f)
@@ -56,6 +57,7 @@ internal class NudgeScript {
         }
         shear * CubicBezier.FastOutSlowIn.transform(t)
       }
+
       Phase.Hold -> {
         elapsed += dt
         if (elapsed >= HOLD_SECONDS && (!short || elapsed >= HOLD_MAX_SECONDS)) {

@@ -95,12 +95,16 @@ class GameRound(
     if (!running) return false
     when (event) {
       LockEvent.Dropped -> drops++
+
       is LockEvent.PinOverset -> oversets++
+
       is LockEvent.TensionBite -> if (event.heavy) seizes++
+
       LockEvent.Opened -> {
         finishedAfter = elapsed(now)
         return true
       }
+
       else -> Unit
     }
     return false

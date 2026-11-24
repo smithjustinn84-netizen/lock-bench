@@ -183,6 +183,7 @@ private fun DrawScope.drawRake(tipZ: Float, tipY: Float, geometry: LockGeometry,
   val reach = (geometry.pickFulcrumZ - tipZ) * outward
   val contact = geometry.pinRestY - RAKE_GAP
   val lift = tipY - contact
+
   // Canvas X of a point [behind] the lead peak: the mouth is the left edge, the back wall the right.
   fun x(behind: Float) = size.width * ((keyway.mouthZ - tipZ) * outward - behind) / span
   fun y(behind: Float): Float {

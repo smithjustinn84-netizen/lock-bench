@@ -140,9 +140,13 @@ private fun DrawScope.drawTrack(torque: Float, showZones: Boolean, seizeAt: Floa
   val color = when {
     // A bare slot says nothing about where the torque sits.
     !showZones -> BenchColors.Nickel
+
     torque >= seizeAt -> BenchColors.Fault
+
     torque < LockMechanics.T_BIND -> BenchColors.Nickel
+
     torque <= LockMechanics.T_EASED -> BenchColors.Set
+
     else -> BenchColors.Brass
   }
   // A stem from the top of the slot, so the pull reads as a length and not just a position.
