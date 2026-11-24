@@ -1,6 +1,7 @@
 package com.lockpicking.bench.ui.bench
 
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.bench.PickTool
 import com.lockpicking.bench.domain.game.GameResult
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.TorqueBand
@@ -38,6 +39,8 @@ data class BenchUiState(
   val setPulse: Int = 0,
   val explode: Float = 0f,
   val ghost: Boolean = false,
+  /** The pick in hand. */
+  val tool: PickTool = PickTool.Hook,
   /** Tension under the right thumb and the pick under the left, for a left-handed picker. */
   val swapHands: Boolean = false,
   /** From the side the keyway runs across the screen, the way the pick pad does. */
@@ -49,6 +52,9 @@ data class BenchUiState(
 ) {
   val pinCount: Int get() = geometry?.pinCount ?: LockGeometry.DEFAULT_PIN_COUNT
   val exploded: Boolean get() = explode > EXPLODED_AT
+
+  /** True if this lock's model came with a rake to pick up. */
+  val hasRake: Boolean get() = geometry?.rake != null
 
   /** True while a blind round is being picked: the camera is held on the keyway and the pins are hidden. */
   val blind: Boolean get() = game != null && game.result == null
@@ -69,6 +75,8 @@ data class GameUiState(
   /** The tier's best time before this round, or null. */
   val bestMillis: Long?,
   val mistakes: Int = 0,
+  /** The rake has been used on this lock: [bestMillis] is then the best raked time. */
+  val raked: Boolean = false,
   /** Set once the lock opens. */
   val result: GameResult? = null,
 )

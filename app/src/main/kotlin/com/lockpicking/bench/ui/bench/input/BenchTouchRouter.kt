@@ -213,6 +213,14 @@ class BenchTouchRouter(
     }
   }
 
+  /** Let go of the pick alone: it is being swapped for another, and the wrench hand is not in on that. */
+  fun letGoOfPick() {
+    if (pickPointer != NONE) {
+      pickPointer = NONE
+      pick.onPickRested()
+    }
+  }
+
   private companion object {
     const val NONE = -1
     const val DEFAULT_DRAG_RANGE_PX = 300f

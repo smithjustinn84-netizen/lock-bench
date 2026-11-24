@@ -1,5 +1,6 @@
 package com.lockpicking.bench.testing
 
+import com.lockpicking.bench.domain.bench.RakeProfile
 import com.lockpicking.bench.domain.lock.PinSpec
 import com.lockpicking.bench.domain.model.LockGeometry
 
@@ -41,6 +42,8 @@ val master3Geometry = LockGeometry(
   shackleTravel = 0.077f,
   pickParkedZ = 0.165f,
   pickParkedY = -0.036f,
+  pickFulcrumZ = 0.135f,
+  rake = RakeProfile.Standard,
 )
 
 /** The aluminium block as `american_1100_padlock.glb` authors it: five stacks, serrated and spooled turn about. */
@@ -62,4 +65,28 @@ val american1100Geometry = LockGeometry(
   shackleTravel = 0.077f,
   pickParkedZ = 0.185f,
   pickParkedY = -0.036f,
+  pickFulcrumZ = 0.155f,
+  rake = RakeProfile.Standard,
+)
+
+/** The trainer as `cutaway_padlock.glb` authors it, where [testGeometry] only has its proportions. */
+val trainerGeometry = LockGeometry(
+  pinSpecs = listOf(
+    PinSpec(1, liftToShear = 0.032f, springRest = 0.152f),
+    PinSpec(2, liftToShear = 0.048f, springRest = 0.168f, spool = true),
+    PinSpec(3, liftToShear = 0.022f, springRest = 0.142f, spool = true),
+    PinSpec(4, liftToShear = 0.040f, springRest = 0.160f),
+  ),
+  pinZ = listOf(0.066f, 0.022f, -0.022f, -0.066f),
+  pinNodeNames = listOf("KeyPin_1", "KeyPin_2", "KeyPin_3", "KeyPin_4"),
+  pinRestY = -0.03f,
+  shearY = 0.07f,
+  chamberTop = 0.25f,
+  driverLength = 0.06f,
+  openDegrees = -90f,
+  shackleTravel = 0.077f,
+  pickParkedZ = 0.165f,
+  pickParkedY = -0.036f,
+  pickFulcrumZ = 0.135f,
+  rake = RakeProfile.Standard,
 )

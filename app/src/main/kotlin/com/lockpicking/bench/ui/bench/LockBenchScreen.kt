@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lockpicking.bench.R
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.LockMechanics
+import com.lockpicking.bench.domain.bench.PickTool
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.ui.bench.feedback.LockFeedback
@@ -100,6 +101,9 @@ enum class HudPart {
 
   /** The guide, which takes its own touches. */
   Guide,
+
+  /** The hook and rake switch in the pick pad's header: buttons, not part of the trackpad around them. */
+  Tool,
 }
 
 /**
@@ -118,7 +122,7 @@ private class TouchLayout(private val router: BenchTouchRouter) {
     }
     router.wrenchBounds = local(HudPart.Wrench) ?: TouchRect.Empty
     router.pickBounds = local(HudPart.Pick) ?: TouchRect.Empty
-    router.blocked = listOfNotNull(local(HudPart.Controls), local(HudPart.Results), local(HudPart.Guide))
+    router.blocked = listOfNotNull(local(HudPart.Controls), local(HudPart.Results), local(HudPart.Guide), local(HudPart.Tool))
   }
 }
 
@@ -188,6 +192,11 @@ fun LockBenchRoute(viewModel: LockBenchViewModel = koinViewModel()) {
       viewModel.onHandsSwapped()
     },
     onPreset = viewModel::onPresetSelected,
+    onTool = { tool ->
+      // The pick comes out of the lock; the thumb on the wrench stays where it is.
+      touch.router.letGoOfPick()
+      viewModel.onToolSelected(tool)
+    },
     onLock = { lock ->
       // The lock under the thumbs is about to be taken off the bench.
       touch.router.letGo()
@@ -251,6 +260,7 @@ fun LockBenchScreen(
   onSwapHands: () -> Unit,
   onPreset: (CameraPreset) -> Unit,
   onLock: (LockModel) -> Unit,
+  onTool: (PickTool) -> Unit,
   onPlay: (GameTier) -> Unit,
   onQuit: () -> Unit,
   onNextLock: () -> Unit,
@@ -348,12 +358,17 @@ fun LockBenchScreen(
           pickY = pickY,
           blind = state.blind,
           showSetCount = state.game?.tier?.showSetCount ?: true,
+          tool = state.tool,
+          onTool = onTool.takeIf { state.hasRake },
+          onToolSwitchPlaced = { onPlaced(HudPart.Tool, it) },
           modifier = zone
             .align(if (wrenchOnLeft) Alignment.BottomEnd else Alignment.BottomStart)
             .width(PickPadWidth)
             .onGloballyPositioned { onPlaced(HudPart.Pick, it.boundsInWindow()) },
         )
       }
+      // With no lock on the bench there is no pad, and no switch on it to keep touches off.
+      DisposableEffect(geometry != null) { onDispose { onPlaced(HudPart.Tool, Rect.Zero) } }
       val result = state.game?.result
       if (result != null) {
         ResultsCard(

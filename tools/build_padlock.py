@@ -32,6 +32,7 @@ Node contract (names are looked up from Kotlin, see LockRig.kt). N is the lock's
     DriverPin_1..N                    origin at the base; lift along Y
     Spring_1..N                       origin at the top of the bible; scale Y to compress
     HookPick                          origin at the hook tip
+    RakePick                          origin at the top of the lead peak; put away at the same spot
     Bench                             shadow-catching locksmith pinning mat
 
 The mechanical numbers Kotlin needs travel in glTF node `extras`, so this file is the only
@@ -110,6 +111,12 @@ SHACKLE_ARC_Y = 0.40
 SHACKLE_HEEL_Y = 0.05
 SHACKLE_TOE_Y = 0.235
 PICK_EXTRA = 0.0                       # extra shank on the pick, for a longer keyway
+# The rake's blade: equal humps this far apart and this deep, and how far its shank lies below
+# their tops. The pitch is deliberately not a pin pitch. RakeProfile.kt reads these from the model.
+RAKE_PITCH = 0.036
+RAKE_DEPTH = 0.014
+RAKE_PEAKS = 3
+RAKE_SHANK_DROP = 0.018
 
 _TRAINER = {k: copy.deepcopy(v) for k, v in dict(globals()).items()
             if k.isupper() and k not in ("ROOT", "MODELS", "STUDIO_HDR", "TO_BLENDER", "FROM_BLENDER")}
@@ -1356,6 +1363,59 @@ def build_wrench_tool(plug):
 
 # ── HookPick (precision beveled medium hook + ergonomic full-tang riveted grip) ───────────────
 
+def add_handle(pick, y_shift=0.0):
+    """The riveted full-tang grip both picks share, joined on to `pick`'s blade. `y_shift`
+    moves it to a tang that sits higher or lower than the hook's."""
+    e = PICK_EXTRA
+    def build_ergonomic_grip(bm):
+        z_stations = [
+            (0.258, 0.0052, 0.0095),
+            (0.266, 0.0074, 0.0118),
+            (0.295, 0.0078, 0.0124),
+            (0.340, 0.0072, 0.0116),
+            (0.395, 0.0080, 0.0128),
+            (0.448, 0.0076, 0.0122),
+            (0.464, 0.0064, 0.0108),
+            (0.470, 0.0044, 0.0086),
+        ]
+        yc = -0.0168 + y_shift
+        right = Vector((1.0, 0.0, 0.0))
+        up = Vector((0.0, 1.0, 0.0))
+        frames = [(Vector((0.0, yc, z + e)), right, up, (hw, hh)) for z, hw, hh in z_stations]
+
+        def sec(dims):
+            hw, hh = dims
+            return chamfer_rect(hw, hh, min(hw, hh) * 0.42)
+
+        sweep_section(bm, frames, sec)
+
+
+    grip = make_object("_grip", build_ergonomic_grip, [M_TOOL, M_GRIP], material_index=1)
+    for gz in (0.282 + e, 0.292 + e, 0.302 + e, 0.312 + e):
+        cut(grip, lambda bm, gz=gz: box(bm, (-0.012, -0.025 + y_shift, gz - 0.0020), (-0.0062, -0.0085 + y_shift, gz + 0.0020)), material_index=1)
+        cut(grip, lambda bm, gz=gz: box(bm, (0.0062, -0.025 + y_shift, gz - 0.0020), (0.012, -0.0085 + y_shift, gz + 0.0020)), material_index=1)
+
+    for rz in (0.352 + e, 0.430 + e):
+        def build_rivet(bm, rz=rz):
+            segs = 12
+            r = 0.0038
+            lo, hi = [], []
+            for k in range(segs):
+                a = 2 * math.pi * k / segs
+                y = -0.0168 + y_shift + r * math.cos(a)
+                z = rz + r * math.sin(a)
+                lo.append(bm.verts.new((-0.0082, y, z)))
+                hi.append(bm.verts.new((0.0082, y, z)))
+            for k in range(segs):
+                n = (k + 1) % segs
+                bm.faces.new((lo[k], lo[n], hi[n], hi[k]))
+            bm.faces.new(lo)
+            bm.faces.new(list(reversed(hi)))
+        join_part(pick, build_rivet, material_index=0)
+
+    join_objects(pick, grip)
+
+
 def build_pick():
     pick_outline = [  # (z, y) in glTF space; exact hook tip pad at (0, 0)
         (-0.0018, 0.0000),
@@ -1394,61 +1454,65 @@ def build_pick():
 
 
     pick = make_object("HookPick", build_pick_blade, [M_TOOL, M_GRIP], material_index=0)
-
-
-    def build_ergonomic_grip(bm):
-        z_stations = [
-            (0.258, 0.0052, 0.0095),
-            (0.266, 0.0074, 0.0118),
-            (0.295, 0.0078, 0.0124),
-            (0.340, 0.0072, 0.0116),
-            (0.395, 0.0080, 0.0128),
-            (0.448, 0.0076, 0.0122),
-            (0.464, 0.0064, 0.0108),
-            (0.470, 0.0044, 0.0086),
-        ]
-        yc = -0.0168
-        right = Vector((1.0, 0.0, 0.0))
-        up = Vector((0.0, 1.0, 0.0))
-        frames = [(Vector((0.0, yc, z + e)), right, up, (hw, hh)) for z, hw, hh in z_stations]
-
-        def sec(dims):
-            hw, hh = dims
-            return chamfer_rect(hw, hh, min(hw, hh) * 0.42)
-
-        sweep_section(bm, frames, sec)
-
-
-    grip = make_object("_grip", build_ergonomic_grip, [M_TOOL, M_GRIP], material_index=1)
-    for gz in (0.282 + e, 0.292 + e, 0.302 + e, 0.312 + e):
-        cut(grip, lambda bm, gz=gz: box(bm, (-0.012, -0.025, gz - 0.0020), (-0.0062, -0.0085, gz + 0.0020)), material_index=1)
-        cut(grip, lambda bm, gz=gz: box(bm, (0.0062, -0.025, gz - 0.0020), (0.012, -0.0085, gz + 0.0020)), material_index=1)
-
-    for rz in (0.352 + e, 0.430 + e):
-        def build_rivet(bm, rz=rz):
-            segs = 12
-            r = 0.0038
-            lo, hi = [], []
-            for k in range(segs):
-                a = 2 * math.pi * k / segs
-                y = -0.0168 + r * math.cos(a)
-                z = rz + r * math.sin(a)
-                lo.append(bm.verts.new((-0.0082, y, z)))
-                hi.append(bm.verts.new((0.0082, y, z)))
-            for k in range(segs):
-                n = (k + 1) % segs
-                bm.faces.new((lo[k], lo[n], hi[n], hi[k]))
-            bm.faces.new(lo)
-            bm.faces.new(list(reversed(hi)))
-        join_part(pick, build_rivet, material_index=0)
-
-    join_objects(pick, grip)
+    add_handle(pick)
     finish(pick, (0.0, 0.0, 0.0), sharp_degrees=42.0, uv_mode="box", uv_scale=8.0)
     pick.location = B((0.0, PIN_REST_Y - 0.006, PLUG_Z1 + 0.030))
     return pick
 
 
 # ── Bench (Locksmith Silicone Pinning Mat) ────────────────────────────────────────────────────
+
+# ── RakePick (three-hump wave rake on the same tang and grip) ─────────────────────────────────
+
+def rake_height(d):
+    """Height of the blade's top edge `d` behind the lead peak, relative to the peak's top."""
+    return -RAKE_DEPTH * (1.0 - math.cos(2.0 * math.pi * d / RAKE_PITCH)) / 2.0
+
+
+def build_rake():
+    e = PICK_EXTRA
+    nose = -RAKE_PITCH / 2.0
+    humps_end = (RAKE_PEAKS - 1) * RAKE_PITCH + RAKE_PITCH / 2.0
+    web = 0.0062                        # metal under the valleys
+    steps = 9 * RAKE_PEAKS
+
+    top = [(nose + (humps_end - nose) * k / steps, 0.0) for k in range(steps + 1)]
+    top = [(z, rake_height(z)) for z, _ in top]
+    # The underside follows the wave at a shallower swing, so the humps read as bent wire, not teeth.
+    under = [(z, -RAKE_DEPTH - web + 0.45 * (y + RAKE_DEPTH)) for z, y in reversed(top)]
+    outline = (
+        [(nose - 0.0030, -RAKE_DEPTH - 0.0030)]              # rounded nose
+        + top
+        + [
+            (humps_end + 0.012, -RAKE_SHANK_DROP),           # run out into the shank
+            (0.1100, -RAKE_SHANK_DROP),
+            (0.2450 + e, -RAKE_SHANK_DROP + 0.0020),
+            (0.2640 + e, -RAKE_SHANK_DROP + 0.0080),
+            (0.4640 + e, -RAKE_SHANK_DROP + 0.0080),
+            (0.4690 + e, -RAKE_SHANK_DROP + 0.0042),
+            (0.4690 + e, -RAKE_SHANK_DROP - 0.0113),
+            (0.4640 + e, -RAKE_SHANK_DROP - 0.0153),
+            (0.2640 + e, -RAKE_SHANK_DROP - 0.0153),
+            (0.2450 + e, -RAKE_SHANK_DROP - 0.0086),
+            (0.1100, -RAKE_SHANK_DROP - 0.0063),
+            (humps_end + 0.012, -RAKE_SHANK_DROP - 0.0063),
+        ]
+        + under
+    )
+
+    def build_blade(bm):
+        prism_yz(bm, outline, -0.0032, 0.0032)
+
+    rake = make_object("RakePick", build_blade, [M_TOOL, M_GRIP], material_index=0)
+    add_handle(rake, y_shift=-RAKE_SHANK_DROP + 0.0132)
+    finish(rake, (0.0, 0.0, 0.0), sharp_degrees=42.0, uv_mode="box", uv_scale=8.0)
+    rake.location = B((0.0, PIN_REST_Y - 0.006, PLUG_Z1 + 0.030))
+    rake["pitch"] = RAKE_PITCH
+    rake["depth"] = RAKE_DEPTH
+    rake["peaks"] = RAKE_PEAKS
+    rake["shank_drop"] = RAKE_SHANK_DROP
+    return rake
+
 
 def build_bench():
     bench_profile = [
@@ -1624,6 +1688,7 @@ def build(lock="trainer", out=None, live=False, preview_dir=None):
     shackle = build_shackle()
     wrench = build_wrench_tool(plug)
     pick = build_pick()
+    build_rake()
     build_bench()
     out = out or os.path.join(MODELS, FILE)
     export(out, lock)

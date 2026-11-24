@@ -7,6 +7,7 @@ import com.lockpicking.bench.data.GameRecords
 import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.domain.bench.BenchSimulation
 import com.lockpicking.bench.domain.bench.BenchSnapshot
+import com.lockpicking.bench.domain.bench.PickTool
 import com.lockpicking.bench.domain.game.GameClock
 import com.lockpicking.bench.domain.game.GameRound
 import com.lockpicking.bench.domain.game.GameTier
@@ -148,6 +149,7 @@ class LockBenchViewModel(
       BenchUiState(
         lock = lock,
         hints = hints,
+        tool = it.tool,
         explode = it.explode,
         ghost = it.ghost,
         swapHands = it.swapHands,
@@ -173,6 +175,7 @@ class LockBenchViewModel(
       simulation = BenchSimulation(geometry, ::emit).apply {
         setExplode(state.explode)
         setGhost(state.ghost)
+        setTool(if (geometry.rake != null) state.tool else PickTool.Hook)
         round?.let { deal(it.bindingOrder, it.tier.seizeAt) }
       }
       lastSnapshot = null
@@ -226,7 +229,10 @@ class LockBenchViewModel(
 
   override val pickDepth: Float get() = simulation?.pickDepthNow ?: 0f
 
-  override fun onPickMoved(depth: Float, lift: Float) = act { movePick(depth, lift * liftRange) }
+  override fun onPickMoved(depth: Float, lift: Float) {
+    if (lift > 0f && simulation?.tool == PickTool.Rake) markRaked()
+    act { movePick(depth, lift * liftRange) }
+  }
 
   override fun onPickRested() = act { letGo() }
 
@@ -239,6 +245,8 @@ class LockBenchViewModel(
   fun onPinTapped(pin: Int) {
     // Blind, there is no tapping a pin up to the shear line: that would give the lock away.
     if (_uiState.value.game != null) return
+    // And a rake is not aimed at a pin.
+    if (_uiState.value.tool != PickTool.Hook) return
     act { nudge(pin) }
   }
 
@@ -267,6 +275,17 @@ class LockBenchViewModel(
     val swapHands = !_uiState.value.swapHands
     _uiState.update { it.copy(swapHands = swapHands) }
     viewModelScope.launch { prefs.saveSwapHands(swapHands) }
+  }
+
+  /**
+   * Swap the pick in hand. Allowed at any time, a blind round included: raking to a false set
+   * and finishing with the hook is how it is done. The wrench and the sets are not disturbed.
+   */
+  fun onToolSelected(tool: PickTool) {
+    val state = _uiState.value
+    if (tool == state.tool || (tool == PickTool.Rake && !state.hasRake)) return
+    _uiState.update { it.copy(tool = tool) }
+    act { setTool(tool) }
   }
 
   fun onReset() = act { reset() }
@@ -380,6 +399,23 @@ class LockBenchViewModel(
     }
   }
 
+  /**
+   * The rake has gone to work on a blind lock: from here the round is timed against raked
+   * rounds. Until that best time is read, there is none to show or to beat.
+   */
+  private fun markRaked() {
+    val current = round ?: return
+    if (current.raked || current.finished) return
+    current.markRaked()
+    val lock = _uiState.value.lock
+    _uiState.update { it.copy(game = it.game?.copy(raked = true, bestMillis = null)) }
+    viewModelScope.launch {
+      val best = records.bestMillis(lock, current.tier, PickTool.Rake) ?: return@launch
+      if (round !== current) return@launch
+      _uiState.update { state -> state.copy(game = state.game?.takeIf { it.result == null }?.copy(bestMillis = best) ?: state.game) }
+    }
+  }
+
   private fun scoreEvent(event: LockEvent) {
     val current = round ?: return
     val before = current.mistakes
@@ -387,7 +423,8 @@ class LockBenchViewModel(
       val lock = _uiState.value.lock
       val previousBest = _uiState.value.game?.bestMillis
       val result = current.result(previousBest)
-      if (result.newBest) viewModelScope.launch { records.saveBest(lock, current.tier, result.timeMillis) }
+      val tool = if (current.raked) PickTool.Rake else PickTool.Hook
+      if (result.newBest) viewModelScope.launch { records.saveBest(lock, current.tier, result.timeMillis, tool) }
       val best = if (result.newBest) result.timeMillis else previousBest
       _uiState.update {
         it.copy(

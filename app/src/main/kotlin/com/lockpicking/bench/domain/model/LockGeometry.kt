@@ -1,5 +1,6 @@
 package com.lockpicking.bench.domain.model
 
+import com.lockpicking.bench.domain.bench.RakeProfile
 import com.lockpicking.bench.domain.lock.PinSpec
 
 /**
@@ -25,6 +26,10 @@ data class LockGeometry(
   /** Where the pick waits when no pin is selected. */
   val pickParkedZ: Float,
   val pickParkedY: Float,
+  /** World Z of the keyway's mouth, which a pick levers on: its tip rises and its handle drops about this point. */
+  val pickFulcrumZ: Float = pickParkedZ,
+  /** The rake the model comes with, or null if it has only a hook. */
+  val rake: RakeProfile? = null,
 ) {
   init {
     require(pinZ.size == pinSpecs.size && pinNodeNames.size == pinSpecs.size) {

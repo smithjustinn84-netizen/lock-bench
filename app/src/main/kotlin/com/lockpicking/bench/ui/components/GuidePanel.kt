@@ -30,6 +30,7 @@ private val GuideSections = listOf(
   R.string.guide_tension_title to R.string.guide_tension_body,
   R.string.guide_spool_title to R.string.guide_spool_body,
   R.string.guide_serrated_title to R.string.guide_serrated_body,
+  R.string.guide_rake_title to R.string.guide_rake_body,
 )
 
 /**

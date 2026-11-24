@@ -66,6 +66,27 @@ The lock is meant to be read through the vibration as much as the screen:
 
 Sliding the pick down the keyway and noting which bump pushes back is how you find the binding pin with **HINTS** off.
 
+### Raking
+
+The **HOOK | RAKE** switch at the top of the pick pad swaps the pick in your hand. Swapping takes the pick out of the lock but leaves the wrench alone, so your tension and your sets stay.
+
+<p align="center">
+  <img src="docs/screenshots/rake.png" width="70%" alt="The rake in the trainer's keyway, its three humps under the first three pins, drawn the same on the pick pad" />
+</p>
+
+A rake is a wavy blade that goes under every pin at once. Hold a light wrench, slide your thumb back and forth across the pad in full strokes, and let the lift wander as you go.
+
+| What is in the lock | What the rake does |
+| --- | --- |
+| **Plain pins** | Each sets as a hump carries it up through the shear line. The Master No. 3 opens in a few strokes. |
+| **Spools** | Knocked about by a passing hump, a spool never squares up to the plug, so it does not set. When the plain pins have gone the plug drops into a false set and the spool holds the blade down. |
+| **Serrated drivers** | The first groove clicks on every pass and the pin falls back. Nothing sets. |
+| **Firm tension** | The peak that sets a pin throws it past the line and it jams until you ease off. Raking only works in the wrench's light band. |
+
+To get through a spool or a serrated pin, stop scrubbing: hold one hump nearly still under the pin and rock it gently up and down, the way you would work it with the hook. Or swap to the hook. The trainer always ends in a false set this way, and the American 1100 gives the rake nothing but clicks.
+
+A tap on the pad does nothing while the rake is in: it is not aimed at a pin.
+
 The **WRENCH** zone shows the torque against the marks where a spool can pass, where it is stuck and where pins seize, and a needle for how far the plug has turned. The **PICK** pad shows each stack against the shear line, with the pick underneath.
 
 ## Blind game
@@ -73,6 +94,8 @@ The **WRENCH** zone shows the torque against the marks where a spool can pass, w
 The **PLAY** row in the **BENCH** drawer starts a blind round. The camera holds on the keyway from the lock's solid side, the pick pad shows only the keyway and the chamber mouths, and hints, ghost, exploded view and the stats are off. Each lock binds in a freshly shuffled order, so you can't learn the answer, only how to feel for it.
 
 The clock starts on your first pull of the wrench and stops when the shackle releases. Then the camera swings round to the cutaway so you can see what you felt. Mistakes are drops (letting go with pins set), oversets and seizes. Three stars means a clean pick under par; best times are kept per lock and tier.
+
+You can rake in a blind round. Once the rake has lifted in a lock, that round is timed against your other raked rounds on that lock and tier, so a raked Master cannot wipe out a single-pin record. The results card says when a round was raked.
 
 | Tier | What you still get |
 | --- | --- |
@@ -110,7 +133,7 @@ Drag anywhere between the two zones to orbit the camera, and pinch to zoom. The 
 app/src/main/kotlin/com/lockpicking/bench/
   domain/                 pure Kotlin, no Android, unit tested
     lock/                 LockMechanics: the pin-tumbler state machine
-    bench/                BenchSimulation: frame-stepped lock, keyway, pick, plug and shackle
+    bench/                BenchSimulation: frame-stepped lock, keyway, hook and rake, plug and shackle
     model/, motion/       LockModel, LockGeometry, springs, easing, RigPose, FrameClock
   data/                   LockAssetRepository, the .glb summary parser and saved best times
   di/AppModule.kt         Koin module

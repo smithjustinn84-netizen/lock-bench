@@ -3,6 +3,8 @@ package com.lockpicking.bench.ui.bench.scene
 import android.util.Log
 import com.google.android.filament.MaterialInstance
 import com.lockpicking.bench.data.glb.GlbInfo
+import com.lockpicking.bench.domain.bench.PickTool
+import com.lockpicking.bench.domain.bench.RakeProfile
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinSpec
 import com.lockpicking.bench.domain.model.LockGeometry
@@ -85,6 +87,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private val plug = part("Core_Plug")
   private val wrench = part("TensionWrench")
   private val pick = part("HookPick")
+
+  /** The rake, if the model has one. It is authored put away at the same spot as the hook. */
+  private val rake: Part? = byName["RakePick"]?.let { Part(it) }
   private val keyPins = (1..pinCount).map { part("KeyPin_$it") }
   private val driverPins = (1..pinCount).map { part("DriverPin_$it") }
   private val springs = (1..pinCount).map { part("Spring_$it") }
@@ -119,6 +124,16 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     // Where the pick waits when no pin is selected, as authored.
     pickParkedZ = pick.rest.z,
     pickParkedY = pick.rest.y,
+    pickFulcrumZ = pickFulcrumZ,
+    rake = rake?.let { extras(it.node) }?.let { profile ->
+      val standard = RakeProfile.Standard
+      RakeProfile(
+        pitch = profile.optDouble("pitch", standard.pitch.toDouble()).toFloat(),
+        depth = profile.optDouble("depth", standard.depth.toDouble()).toFloat(),
+        peaks = profile.optInt("peaks", standard.peaks),
+        shankDrop = profile.optDouble("shank_drop", standard.shankDrop.toDouble()).toFloat(),
+      )
+    },
   )
 
   /** Which way the plug turns to open. */
@@ -132,6 +147,7 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
   private var appliedPlug = Float.NaN
   private var appliedSwing = Float.NaN
   private var appliedPickPitch = Float.NaN
+  private var appliedTool: Part? = null
   private val appliedSpring = FloatArray(pinCount) { Float.NaN }
 
   init {
@@ -184,14 +200,26 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     // The wrench is the plug's child and turns with it; under torque its handle springs on ahead.
     wrench.roll(pose.wrenchFlexDegrees)
 
+    // Only the pick in hand is on the bench; a model with no rake keeps showing its hook.
+    val inHand = if (pose.tool == PickTool.Rake && rake != null) rake else pick
+    for (tool in listOfNotNull(pick, rake)) {
+      val shown = tool === inHand
+      if (tool.node.isVisible != shown) tool.node.isVisible = shown
+    }
+    if (inHand !== appliedTool) {
+      appliedTool = inHand
+      appliedPickPitch = Float.NaN
+    }
     val pickOut = 0.20f * e
-    pick.offset(y = pose.pickY - pick.rest.y, z = pose.pickZ - pick.rest.z + pickOut)
-    // The pick levers on the mouth of the keyway: as the tip rises the handle drops.
+    inHand.offset(y = pose.pickY - inHand.rest.y, z = pose.pickZ - inHand.rest.z + pickOut)
+    // The pick levers on the mouth of the keyway: as the tip rises the handle drops. The rake's
+    // blade is the same lever, measured from where its lead peak just touches a pin at rest.
     val reach = pickFulcrumZ - pose.pickZ
-    val pitch = if (reach > 0.02f) Math.toDegrees(atan2(pose.pickY - pinRestY, reach).toDouble()).toFloat() else 0f
+    val rise = if (inHand === rake) pose.pickY - (pinRestY - RAKE_GAP) else pose.pickY - pinRestY
+    val pitch = if (reach > 0.02f) Math.toDegrees(atan2(rise, reach).toDouble()).toFloat() else 0f
     if (differs(appliedPickPitch, pitch)) {
       appliedPickPitch = pitch
-      pick.node.rotation = Rotation(x = pitch)
+      inHand.node.rotation = Rotation(x = pitch)
     }
 
     return applyBodyAlpha(pose.bodyAlpha)
@@ -242,6 +270,9 @@ class LockRig(modelNode: ModelNode, glb: GlbInfo) {
     private const val TAG = "LockRig"
     private const val EPS = 1e-5f
     private const val ROLL_EPS = 0.01f
+
+    /** Daylight between the rake's lead peak and a pin at rest: PickMotion's PICK_GAP. */
+    private const val RAKE_GAP = 0.002f
 
     /** How far a spool driver leans when the plug has turned fully into its waist. */
     private const val SPOOL_TILT_DEGREES = 5f

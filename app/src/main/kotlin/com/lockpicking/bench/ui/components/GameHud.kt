@@ -113,6 +113,9 @@ fun ResultsCard(result: GameResult, onNext: () -> Unit, onQuit: () -> Unit, modi
       result.previousBestMillis?.takeIf { result.newBest }?.let {
         Text(stringResource(R.string.game_previous_best, formatGameTime(it)), style = BenchType.Small, color = BenchColors.Dim)
       }
+      if (result.raked) {
+        Text(stringResource(R.string.game_raked), style = BenchType.Small, color = BenchColors.Dim)
+      }
       if (result.stars < 3) {
         Text(stringResource(R.string.game_par, result.parSeconds), style = BenchType.Small, color = BenchColors.Dim)
       }

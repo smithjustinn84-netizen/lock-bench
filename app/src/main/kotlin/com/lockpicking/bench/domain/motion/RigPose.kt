@@ -1,5 +1,7 @@
 package com.lockpicking.bench.domain.motion
 
+import com.lockpicking.bench.domain.bench.PickTool
+
 /** Everything about the model's pose that is not pin travel. Written by the simulation each frame. */
 class RigPose {
   /** Signed plug rotation about Z, degrees. */
@@ -26,7 +28,11 @@ class RigPose {
   var wrenchFlexDegrees = 0f
     internal set
 
-  /** World Z and height of the hook tip. */
+  /** Which pick is in hand. The other is put away. */
+  var tool = PickTool.Hook
+    internal set
+
+  /** World Z and height of the pick's tip: the hook's point, or the top of the rake's lead peak. */
   var pickZ = 0f
     internal set
   var pickY = 0f

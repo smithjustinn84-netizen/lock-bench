@@ -17,6 +17,8 @@ data class GameResult(
   val parSeconds: Int,
   /** The best time for this tier before this round, or null if there was none. */
   val previousBestMillis: Long?,
+  /** The rake was used on this lock, so the time stands among rake times, not hook times. */
+  val raked: Boolean = false,
 ) {
   val mistakes: Int get() = drops + oversets + seizes
   val newBest: Boolean get() = previousBestMillis == null || timeMillis < previousBestMillis
@@ -52,10 +54,19 @@ class GameRound(
   var seizes = 0
     private set
 
+  /** True once the rake has been put to this lock. A round is a hook round until then. */
+  var raked = false
+    private set
+
   val mistakes: Int get() = drops + oversets + seizes
   val started: Boolean get() = startedAt != NOT_YET
   val finished: Boolean get() = finishedAfter != NOT_YET
   private val running: Boolean get() = started && !finished
+
+  /** The rake went in. There is no taking it back: the round is a rake round from here. */
+  fun markRaked() {
+    if (!finished) raked = true
+  }
 
   /** The clock starts with the first touch of the wrench. Later calls do nothing. */
   fun start(now: Long) {
@@ -98,7 +109,7 @@ class GameRound(
   /** The result of a finished round, against the tier's [previousBestMillis]. */
   fun result(previousBestMillis: Long?): GameResult {
     check(finished) { "the lock is not open yet" }
-    return GameResult(tier, finishedAfter, drops, oversets, seizes, stars(), parSeconds, previousBestMillis)
+    return GameResult(tier, finishedAfter, drops, oversets, seizes, stars(), parSeconds, previousBestMillis, raked)
   }
 
   private fun stars(): Int = when {

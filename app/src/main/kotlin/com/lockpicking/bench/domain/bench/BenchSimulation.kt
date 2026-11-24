@@ -3,12 +3,15 @@ package com.lockpicking.bench.domain.bench
 import com.lockpicking.bench.domain.lock.LockEvent
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
+import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.domain.motion.RigPose
 import com.lockpicking.bench.domain.motion.SpringValue
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sign
 
 /** The coarse state of the bench: what changes a few times a gesture, not every frame. */
 data class BenchSnapshot(
@@ -31,8 +34,10 @@ data class BenchSnapshot(
  * The lock plus everything that moves around it, stepped one display frame at a time.
  *
  * Inputs arrive as intents ([movePick], [nudge], [pullWrench], …); [advance] turns them into
- * pin travel and a [pose]. The pick is somewhere along the [keyway] and can only push the pin
- * its tip is under; between pins it is under a land and knocks on it if lifted. It returns false once nothing is moving, so the caller can stop asking
+ * pin travel and a [pose]. The hook is somewhere along the [keyway] and can only push the pin
+ * its tip is under; between pins it is under a land and knocks on it if lifted. The rake
+ * ([setTool]) is a blade under several pins at once, which it carries up and down as it is
+ * scrubbed along. [advance] returns false once nothing is moving, so the caller can stop asking
  * for frames: the scene renders on demand and a settled bench should cost nothing.
  *
  * Pure Kotlin: no rendering, no Android, no Compose.
@@ -91,6 +96,32 @@ class BenchSimulation(
   private var explodeTarget = 0f
   private var ghost = false
 
+  /** The pick in hand. */
+  var tool = PickTool.Hook
+    private set
+
+  /** The rake this lock comes with: without one in the model, the standard one. */
+  private val rake = geometry.rake ?: RakeProfile.Standard
+
+  /** +1 if the keyway's mouth is at the high-Z end, so "behind the tip" is toward higher Z. */
+  private val outward = sign(keyway.mouthZ - keyway.backZ)
+
+  /** How high the rake's lead peak rides, above where it touches a pin at rest. */
+  private var bladeLift = 0f
+
+  /** Where the hand had the rake's lift last frame, to bring it to this frame's a step at a time. */
+  private var lastRakeRequest = 0f
+
+  /** True while a pin under the rake is still on its way up to where the blade wants it. */
+  private var rakeClimbing = false
+
+  /** What each pin has already been heard to do since the blade came under it, as bits of [Cue]. */
+  private val cued = IntArray(geometry.pinCount)
+
+  /** The pin the rake was last stopped by, and how long ago, so the status does not flicker hump to hump. */
+  private var rakeBlockedPin = -1
+  private var rakeBlockedFor = 0f
+
   init {
     writePose()
   }
@@ -144,8 +175,23 @@ class BenchSimulation(
     clearRequest()
   }
 
-  /** A tap: slide the pick under [pin], lift it to the shear line, and let go. */
+  /**
+   * Swap the pick in hand. The one that was in the lock comes out, so the pins it held go back
+   * on their springs, but the wrench stays where it is and every set with it.
+   */
+  fun setTool(next: PickTool) {
+    if (next == tool) return
+    nudgeScript.cancel()
+    clearRequest()
+    parkPick()
+    lock.release()
+    tool = next
+    writePose()
+  }
+
+  /** A tap: slide the hook under [pin], lift it to the shear line, and let go. A rake is not aimed. */
   fun nudge(pin: Int) {
+    if (tool != PickTool.Hook) return
     if (!acceptsInput || pin !in 0 until geometry.pinCount) return
     nudgeScript.start(pin, lock.pins[pin].liftToShear)
     pickDepth = keyway.depthOf(pin)
@@ -206,7 +252,7 @@ class BenchSimulation(
     bindingPin = lock.bindingPin,
     oversetPin = lock.oversetPin,
     falseSetPin = lock.falseSetPin,
-    blockedPin = lock.blockedPin,
+    blockedPin = if (tool == PickTool.Rake) rakeBlockedPin else lock.blockedPin,
     selectedPin = selectedPin,
     setPulse = setPulse,
   )
@@ -217,13 +263,22 @@ class BenchSimulation(
     var moving = torque.step(dt)
     lock.applyTorque(torque.value)
 
-    runNudge(dt)
-    pushRequestedPin(dt)
+    val depth = if (acceptsInput) pickDepth else Float.NaN
+    var pickMoving = false
+    if (tool == PickTool.Rake) {
+      val from = pick.pickZ
+      pickMoving = pick.slide(dt, depth)
+      scrub(from, pick.pickZ, dt, depth.isNaN())
+    } else {
+      runNudge(dt)
+      pushRequestedPin(dt)
+    }
     stepPins(dt)
 
     moving = choreography.advance(dt, lock) or moving
     wrench.target = if ((wrenchHeld && acceptsInput) || lock.opened) 1f else 0f
-    moving = pick.advance(dt, if (acceptsInput) pickDepth else Float.NaN, requestedLift, lock) or moving
+    if (tool == PickTool.Hook) pickMoving = pick.advance(dt, depth, requestedLift, lock)
+    moving = pickMoving || rakeClimbing || moving
     explode.target = explodeTarget
     bodyAlpha.target = if (ghost) GHOST_ALPHA else 1f
 
@@ -254,6 +309,115 @@ class BenchSimulation(
     selectedPin = -1
     wardReported = false
     endReported = 0
+    bladeLift = 0f
+    lastRakeRequest = 0f
+    rakeClimbing = false
+    rakeBlockedPin = -1
+    cued.fill(0)
+  }
+
+  // ── The rake ────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * One frame of the rake: the blade has slid from [fromZ] to [toZ] and the hand's lift has
+   * gone from last frame's to this one's. Played in small steps, because at scrubbing speed a
+   * hump crosses a pin in a frame or two and a pin wedged up by one covers its whole travel in
+   * less: taken a frame at a time, the blade would step over grooves, shoulders and sets.
+   */
+  private fun scrub(fromZ: Float, toZ: Float, dt: Float, parked: Boolean) {
+    rakeClimbing = false
+    val wantNow = if (parked) 0f else requestedLift
+    val wantBefore = lastRakeRequest
+    lastRakeRequest = wantNow
+    selectedPin = if (parked) -1 else keyway.pinAt(toZ)
+    rakeBlockedFor += dt
+    if (rakeBlockedFor > BLOCK_LINGER_SECONDS) rakeBlockedPin = -1
+
+    if (parked || !keyway.contains(toZ)) {
+      // Out of the lock, or still on its way in: nothing is under the blade.
+      if (lock.anyHeld) lock.release()
+      cued.fill(0)
+      bladeLift = 0f
+      if (!parked) pick.ride(0f)
+      return
+    }
+    // A blade that is sliding cannot lean on a pin: only one that is nearly still turns the plug back.
+    val speed = abs(toZ - fromZ) / dt
+    val authority = 1f - smooth((speed - STEADY_SPEED) / (SLIDING_SPEED - STEADY_SPEED))
+    val step = dt / RAKE_STEPS
+    for (n in 1..RAKE_STEPS) {
+      val t = n.toFloat() / RAKE_STEPS
+      rakeStep(fromZ + (toZ - fromZ) * t, wantBefore + (wantNow - wantBefore) * t, step, authority)
+      if (lock.opened) return
+    }
+    pick.ride(bladeLift)
+    val stopped = lock.blockedPin
+    if (stopped >= 0) {
+      rakeBlockedPin = stopped
+      rakeBlockedFor = 0f
+    }
+  }
+
+  /**
+   * The blade at [z] with the hand asking for [want] at its lead peak.
+   *
+   * It is a rigid lever on the mouth of the keyway, so a point [RakeProfile] puts `o` below
+   * the lead peak, a fraction `k` of the way in from the mouth, is at `lift * k + o`. The blade
+   * rises to what the hand asks unless a pin under it is against a stop, or cannot be pushed
+   * up that fast: the lowest of those is where it rides. Every pin it touches is then carried
+   * to its height, and the rest are let go.
+   */
+  private fun rakeStep(z: Float, want: Float, dt: Float, authority: Float) {
+    val reach = (geometry.pickFulcrumZ - z) * outward
+    if (reach < MIN_REACH) {
+      if (lock.anyHeld) lock.release()
+      bladeLift = 0f
+      return
+    }
+    var lift = want
+    var capPin = -1
+    var capStop = 0f
+    for (i in 0 until geometry.pinCount) {
+      val behind = (geometry.pinZ[i] - z) * outward
+      val o = rake.heightAt(behind)
+      val k = 1f - behind / reach
+      if (o.isNaN() || k < MIN_LEVER) continue
+      val wanted = want * k + o
+      if (wanted <= lock.keyLift(i)) continue
+      val soon = lock.reach(i, wanted, dt, wedge = true, authority = authority)
+      val limit = lock.liftLimit(i, rake = true)
+      val stop = min(soon, limit)
+      if (stop >= wanted) continue
+      if (soon < limit) rakeClimbing = rakeClimbing || soon > lock.keyLift(i) + REACHED
+      val allows = (stop - o) / k
+      if (allows < lift) {
+        lift = allows
+        capPin = i
+        capStop = stop
+      }
+    }
+    lift = max(lift, 0f)
+    bladeLift = lift
+
+    // In binding order, so the pin holding the plug is moved before the ones waiting on it.
+    for (i in lock.bindingOrder) {
+      val behind = (geometry.pinZ[i] - z) * outward
+      val o = rake.heightAt(behind)
+      val k = 1f - behind / reach
+      // The pin that stopped the blade goes to its stop exactly: arithmetic must not leave it a hair short for good.
+      var at = if (o.isNaN() || k < MIN_LEVER) 0f else if (i == capPin) capStop else lift * k + o
+      // A jammed key pin stays where it is; the blade holds it only while it is up against it.
+      val touching = at > 0f && (lock.state(i) != PinState.Overset || at >= lock.keyLift(i) - TOUCHING)
+      if (!touching) {
+        if (lock.isHeld(i)) lock.release(i)
+        cued[i] = 0
+        continue
+      }
+      // An earlier pin in this step may have set and changed what this one is up against.
+      at = min(at, lock.reach(i, at, dt, wedge = true, authority = authority))
+      lock.press(i, at, wanted = want * k + o, alone = false, authority = authority)
+      if (lock.opened) return
+    }
   }
 
   private fun runNudge(dt: Float) {
@@ -316,7 +480,7 @@ class BenchSimulation(
   private fun stepPins(dt: Float) {
     val before = totalTravel()
     lock.step(dt)
-    if (before != totalTravel() || lock.heldPin >= 0) motionTick++
+    if (before != totalTravel() || lock.anyHeld) motionTick++
   }
 
   private fun totalTravel(): Float {
@@ -332,13 +496,37 @@ class BenchSimulation(
     pose.wrenchSeat = wrench.value
     pose.torque = lock.torque
     pose.wrenchFlexDegrees = choreography.openSign * lock.torque * WRENCH_FLEX_DEGREES
+    pose.tool = tool
     pose.pickZ = pick.pickZ
     pose.pickY = pick.pickY
     pose.explode = explode.value
     pose.bodyAlpha = bodyAlpha.value
   }
 
-  private fun handle(event: LockEvent) {
+  /**
+   * A rake goes over every pin several times a second, and a pin against a stop would say so on
+   * every hump. Each pin is heard once for each kind of thing while the blade stays under it;
+   * after that a stop is only the scrape of the blade riding under it. Solid metal, a set pin
+   * or the top of a chamber, is never more than that scrape: a rake is always running into it.
+   */
+  private fun quietened(event: LockEvent): LockEvent? {
+    val (pin, cue) = when (event) {
+      is LockEvent.HardStop -> return LockEvent.WardScrape
+      is LockEvent.SpoolBlocked -> event.pin to Cue.SPOOL
+      is LockEvent.SerrationHeld -> event.pin to Cue.HELD
+      is LockEvent.Seized -> event.pin to Cue.SEIZED
+      is LockEvent.SerrationClick -> event.pin to (Cue.CLICK shl (event.notch - 1))
+      else -> return event
+    }
+    if (cued[pin] and cue == 0) {
+      cued[pin] = cued[pin] or cue
+      return event
+    }
+    return if (event is LockEvent.SerrationClick) null else LockEvent.WardScrape
+  }
+
+  private fun handle(raw: LockEvent) {
+    val event = if (tool == PickTool.Rake) quietened(raw) ?: return else raw
     when (event) {
       is LockEvent.PinSet -> {
         setPulse++
@@ -357,8 +545,38 @@ class BenchSimulation(
     onEvent(event)
   }
 
+  /** Bits of [cued]. A serration click takes one bit per groove, from [CLICK] up. */
+  private object Cue {
+    const val SPOOL = 2
+    const val HELD = 4
+    const val SEIZED = 8
+    const val CLICK = 16
+  }
+
   private companion object {
     const val GHOST_ALPHA = 0.14f
+
+    /** Steps the rake's frame is played in. */
+    const val RAKE_STEPS = 12
+
+    /** The blade's slide, in units a second, below which it pushes steadily and above which it only glances. */
+    const val STEADY_SPEED = 0.015f
+    const val SLIDING_SPEED = 0.06f
+
+    /** Nearer the mouth than this the blade has no lever to speak of, and a point this little of the way in does no lifting. */
+    const val MIN_REACH = 0.02f
+    const val MIN_LEVER = 0.05f
+
+    /** A blade within this of a jammed key pin's tip is still holding it. */
+    const val TOUCHING = 0.001f
+
+    /** How long the status goes on naming the pin that last stopped the rake. */
+    const val BLOCK_LINGER_SECONDS = 0.5f
+
+    fun smooth(t: Float): Float {
+      val x = t.coerceIn(0f, 1f)
+      return x * x * (3f - 2f * x)
+    }
 
     /** How far the wrench's handle springs round at full torque. */
     const val WRENCH_FLEX_DEGREES = 4f

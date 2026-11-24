@@ -81,6 +81,22 @@ Plain drivers are flat cylinders. Most locks sold today also have **security pin
 | **Spool** | Thin in the middle, like a cotton reel. When it is lifted, its thin waist can sit on the shear line and let the plug turn much further than a real set. That is a **false set**. To beat it, keep lifting the spool and ease off the wrench until the plug turns back a little, called **counter-rotation**, and the spool sets. | Pins 2 and 3 on the trainer, pins 2 and 4 on the American 1100. The plug jumps round and hangs. |
 | **Serrated** | Ringed with fine grooves. Each groove clicks as it passes the shear line, so it feels like a set when it isn't. With heavy tension a groove catches and holds the pin. Keep tension light and keep lifting through the clicks. | Pins 1, 3 and 5 on the American 1100. |
 
+## Raking
+
+A **rake** is a pick with a wavy blade. Instead of finding one pin at a time, you scrub it in and out under all of them with a light wrench, changing how high you hold it as you go. Each hump kicks the pins up as it passes, and whichever pin is binding at that moment sets. On a lock of plain pins it is fast and takes little skill, which is why cheap padlocks are said to rake open.
+
+It is light tension or nothing. A rake cannot feel for the shear line the way a hook does, so it throws pins past it: under a light wrench they fall back, and under a firm one they jam.
+
+Security pins are made to stop it:
+
+| Pin | What a rake does to it |
+| --- | --- |
+| **Standard** | Sets as a hump passes under it. |
+| **Spool** | Gets knocked about without ever squaring up to the plug, so it does not set. Once the other pins have gone the plug drops into a false set, and from there the spool has to be eased up over its shoulder while the plug turns back. A passing hump cannot do that. |
+| **Serrated** | Clicks on its first groove every pass and falls back. Each groove has to be pushed through steadily. |
+
+So raking gets you as far as the security pins and no further. From there you slow down until the blade is almost still and **rock** one hump up and down under the pin, which is single-pin picking with the wrong tool, or you swap to the hook. In the app the **HOOK | RAKE** switch is on the pick pad, and swapping keeps your tension and your sets.
+
 ## The locks on the bench
 
 They are bench models, made in the style of real locks, not copies of them.
@@ -104,6 +120,8 @@ They are bench models, made in the style of real locks, not copies of them.
 | **Overset** | A pin pushed too far, so its key pin blocks the shear line. |
 | **Pin stack** | A key pin, a driver and a spring in one chamber. |
 | **Plug** | The part of the lock that turns. |
+| **Rake** | A wavy pick scrubbed under all the pins at once. Raking is using one. |
+| **Rocking** | Working one hump of a rake slowly up and down under a single pin. |
 | **Seize** | A binding pin pinched too hard to lift, from too much tension. |
 | **Serrated pin** | A driver with grooves that click like false sets. |
 | **Set** | A pin lifted to the shear line and held there by tension. |

@@ -6,6 +6,7 @@ import com.lockpicking.bench.data.LockAssetRepository
 import com.lockpicking.bench.data.SavedBench
 import com.lockpicking.bench.data.glb.GlbInfo
 import com.lockpicking.bench.domain.bench.Keyway
+import com.lockpicking.bench.domain.bench.PickTool
 import com.lockpicking.bench.domain.game.GameClock
 import com.lockpicking.bench.domain.game.GameTier
 import com.lockpicking.bench.domain.lock.LockEvent
@@ -14,7 +15,10 @@ import com.lockpicking.bench.domain.lock.PinState
 import com.lockpicking.bench.domain.lock.TorqueBand
 import com.lockpicking.bench.domain.model.LockModel
 import com.lockpicking.bench.domain.motion.FrameClock
+import com.lockpicking.bench.domain.model.LockGeometry
 import com.lockpicking.bench.testing.american1100Geometry
+import com.lockpicking.bench.testing.master3Geometry
+import com.lockpicking.bench.testing.trainerGeometry
 import com.lockpicking.bench.testing.testGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,9 +64,11 @@ class LockBenchViewModelTest {
 
   private class FakeRecords : GameRecords {
     val best = mutableMapOf<Pair<LockModel, GameTier>, Long>()
-    override suspend fun bestMillis(lock: LockModel, tier: GameTier): Long? = best[lock to tier]
-    override suspend fun saveBest(lock: LockModel, tier: GameTier, millis: Long) {
-      best[lock to tier] = millis
+    val rakeBest = mutableMapOf<Pair<LockModel, GameTier>, Long>()
+    private fun times(tool: PickTool) = if (tool == PickTool.Rake) rakeBest else best
+    override suspend fun bestMillis(lock: LockModel, tier: GameTier, tool: PickTool): Long? = times(tool)[lock to tier]
+    override suspend fun saveBest(lock: LockModel, tier: GameTier, millis: Long, tool: PickTool) {
+      times(tool)[lock to tier] = millis
     }
   }
 
@@ -660,6 +666,125 @@ class LockBenchViewModelTest {
     vm.onGameStarted(GameTier.Apprentice)
     // The trainer's record is not this lock's.
     assertNull(vm.uiState.value.game!!.bestMillis)
+  }
+
+  // ── The rake ────────────────────────────────────────────────────────────────────────────────
+
+  /** Scrubs the pick pad back and forth for [seconds], two strokes a second, with a wandering lift. */
+  private fun TestScope.scrub(vm: LockBenchViewModel, seconds: Float) {
+    val frames = (seconds * 1000 / FRAME_MILLIS).toInt()
+    for (frame in 0 until frames) {
+      val t = frame * FRAME_MILLIS / 1000f
+      val stroke = (t * 2f) % 1f
+      val wander = (t * 0.7f) % 1f
+      vm.onPickMoved(if (stroke < 0.5f) stroke * 2f else 2f - stroke * 2f, 0.4f + 0.4f * (if (wander < 0.5f) wander * 2f else 2f - wander * 2f))
+      advanceTimeBy(FRAME_MILLIS)
+      if (vm.uiState.value.opened) return
+    }
+  }
+
+  private fun TestScope.boundTo(vm: LockBenchViewModel, geometry: LockGeometry): LockBenchViewModel {
+    advanceUntilIdle()
+    vm.onModelBound(geometry)
+    backgroundScope.launch { vm.runFrameLoop(frameClock()) { _, _ -> } }
+    return vm
+  }
+
+  @Test
+  fun `the rake is offered only for a lock whose model has one`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    // The bare test geometry has no rake in it.
+    assertFalse(vm.uiState.value.hasRake)
+    vm.onToolSelected(PickTool.Rake)
+    assertEquals(PickTool.Hook, vm.uiState.value.tool)
+  }
+
+  @Test
+  fun `picking up the rake keeps the wrench and the sets, and so does putting it down`() = runTest(dispatcher) {
+    val vm = boundTo(viewModel(), trainerGeometry)
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    vm.onPinTapped(vm.uiState.value.bindingPin)
+    play()
+    assertEquals(1, vm.uiState.value.setCount)
+
+    vm.onToolSelected(PickTool.Rake)
+    play(0.3f)
+    assertEquals(PickTool.Rake, vm.uiState.value.tool)
+    assertEquals(PickTool.Rake, vm.pose!!.tool)
+    assertEquals(1, vm.uiState.value.setCount)
+    assertTrue(vm.uiState.value.tension)
+
+    vm.onToolSelected(PickTool.Hook)
+    play(0.3f)
+    assertEquals(PickTool.Hook, vm.pose!!.tool)
+    assertEquals(1, vm.uiState.value.setCount)
+    assertTrue(vm.uiState.value.tension)
+  }
+
+  @Test
+  fun `a tap on the pad does nothing with the rake in hand`() = runTest(dispatcher) {
+    val vm = boundTo(viewModel(), trainerGeometry)
+    vm.onToolSelected(PickTool.Rake)
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    vm.onPinTapped(vm.uiState.value.bindingPin)
+    play()
+    assertEquals(0, vm.uiState.value.setCount)
+  }
+
+  @Test
+  fun `the rake stays in hand when the lock is changed`() = runTest(dispatcher) {
+    val vm = boundTo(viewModel(), trainerGeometry)
+    vm.onToolSelected(PickTool.Rake)
+    vm.onLockSelected(LockModel.Master3)
+    assertEquals(PickTool.Rake, vm.uiState.value.tool)
+    advanceUntilIdle()
+    vm.onModelBound(master3Geometry)
+    assertEquals(PickTool.Rake, vm.pose!!.tool)
+  }
+
+  @Test
+  fun `raking a blind lock open is a rake time and leaves the hook time alone`() = runTest(dispatcher) {
+    records.best[LockModel.Trainer to GameTier.Apprentice] = 9_000L
+    val vm = boundTo(viewModel(), master3Geometry)
+    vm.onGameStarted(GameTier.Apprentice)
+    advanceUntilIdle()
+    assertEquals(9_000L, vm.uiState.value.game!!.bestMillis)
+    assertFalse(vm.uiState.value.game!!.raked)
+
+    vm.onToolSelected(PickTool.Rake)
+    // Holding the rake is not using it.
+    assertFalse(vm.uiState.value.game!!.raked)
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    scrub(vm, seconds = 5f)
+
+    val game = vm.uiState.value.game!!
+    assertTrue(vm.uiState.value.opened)
+    assertTrue(game.raked)
+    val result = game.result!!
+    assertTrue(result.raked)
+    // The first raked round has no raked time to beat, whatever the hook's best is.
+    assertNull(result.previousBestMillis)
+    assertTrue(result.newBest)
+    advanceUntilIdle()
+    assertEquals(result.timeMillis, records.rakeBest[LockModel.Trainer to GameTier.Apprentice])
+    assertEquals(9_000L, records.best[LockModel.Trainer to GameTier.Apprentice])
+  }
+
+  @Test
+  fun `a round the rake only started is still a rake round when the hook finishes it`() = runTest(dispatcher) {
+    val vm = boundTo(viewModel(), master3Geometry)
+    vm.onGameStarted(GameTier.Apprentice)
+    vm.onToolSelected(PickTool.Rake)
+    vm.onWrenchPulled(EASED)
+    play(0.5f)
+    vm.onPickMoved(0.5f, 0.2f)
+    play(0.2f)
+    vm.onPickRested()
+    vm.onToolSelected(PickTool.Hook)
+    assertTrue(vm.uiState.value.game!!.raked)
   }
 
   private companion object {

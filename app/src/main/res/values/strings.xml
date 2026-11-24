@@ -58,6 +58,7 @@
     <string name="game_par">Three stars: clean and under %1$d s.</string>
     <string name="game_next">NEXT LOCK</string>
     <string name="game_quit">QUIT</string>
+    <string name="game_raked">Raked. Timed against your other raked rounds.</string>
     <string name="game_tap_shackle">Or tap the shackle for the next lock.</string>
 
     <!-- Guide -->
@@ -78,6 +79,8 @@
     <string name="guide_spool_body">A spool driver is thin in the middle. Its waist can sit on the shear line and let the plug turn far: a false set. Keep lifting the spool and ease the wrench until the plug turns back a little (counter-rotation), and it sets.</string>
     <string name="guide_serrated_title">SERRATED PINS</string>
     <string name="guide_serrated_body">A serrated driver has fine grooves, and each one clicks on the shear line like a set that is not one. Pull hard and a groove catches. Keep the tension light and lift through the clicks.</string>
+    <string name="guide_rake_title">RAKING</string>
+    <string name="guide_rake_body">A rake is a wavy blade scrubbed in and out under every pin at once, with a light wrench. Plain pins set as its humps pass. A spool only lets the plug drop into a false set, and a serrated pin only clicks: slow right down and rock one hump under the pin, or switch to the hook.</string>
     <string name="guide_more">The full primer, with a glossary, is docs/LOCKSPORT.md in the project.</string>
 
     <!-- Tension wrench -->
@@ -95,6 +98,8 @@
 
     <!-- Pick pad -->
     <string name="pick_title">PICK</string>
+    <string name="tool_hook">HOOK</string>
+    <string name="tool_rake">RAKE</string>
     <string name="shear_line_count">%1$d/%2$d</string>
 
     <!-- Stats pill -->
@@ -107,6 +112,6 @@
 
     <!-- Accessibility -->
     <string name="cd_explode_slider">Exploded view amount</string>
-    <string name="cd_pick_pad">Pick pad. Slide across to move the pick along the keyway and slide up to lift its tip. Tap a column to lift that pin to the shear line.</string>
+    <string name="cd_pick_pad">Pick pad. Slide across to move the pick along the keyway and slide up to lift its tip. With the hook, tap a column to lift that pin to the shear line. With the rake, scrub across and back.</string>
     <string name="cd_render_stats">Render stats. %1$s</string>
 </resources>

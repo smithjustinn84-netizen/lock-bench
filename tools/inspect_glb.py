@@ -16,7 +16,7 @@ ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 PATH = ARGS[0] if ARGS else os.path.join(
     ROOT, "app", "src", "main", "assets", "models", "cutaway_padlock.glb")
 
-TRIANGLE_BUDGET = 18_000
+TRIANGLE_BUDGET = 19_000
 
 with open(PATH, "rb") as f:
     data = f.read()
@@ -69,7 +69,7 @@ names = {n["name"] for n in doc["nodes"]}
 pin_count = 0
 while f"KeyPin_{pin_count + 1}" in names:
     pin_count += 1
-REQUIRED = (["Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick", "KeyPin_1"]
+REQUIRED = (["Body_Cutaway", "Shackle", "Core_Plug", "TensionWrench", "HookPick", "RakePick", "KeyPin_1"]
             + [f"{kind}_{i}" for kind in ("KeyPin", "DriverPin", "Spring") for i in range(1, pin_count + 1)])
 missing = [n for n in REQUIRED if n not in names]
 print()

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,9 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -28,12 +31,16 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.lockpicking.bench.R
 import com.lockpicking.bench.domain.bench.Keyway
+import com.lockpicking.bench.domain.bench.PickTool
+import com.lockpicking.bench.domain.bench.RakeProfile
 import com.lockpicking.bench.domain.lock.LockMechanics
 import com.lockpicking.bench.domain.lock.LockReadout
 import com.lockpicking.bench.domain.lock.PinState
@@ -50,7 +57,9 @@ private const val PULSE_MILLIS = 520
  * The keyway runs across the pad, mouth on the left. Sliding a thumb across moves the pick
  * along it; sliding up lifts the tip. The pad takes no touches itself: they fall through to
  * the 3D view, whose router knows where the pad is, so that this thumb and the one on the
- * wrench can be down together.
+ * wrench can be down together. The one exception is the hook and rake switch in its header,
+ * which is a pair of buttons the picking thumb can reach without the other letting go of the
+ * wrench; [onToolSwitchPlaced] says where it is, in window pixels, so the router leaves it alone.
  *
  * It reads pin travel straight from [pins], and the tip from [pickZ] and [pickY], in the draw
  * phase, keyed on [motionTick], so a moving pin repaints this canvas without recomposing
@@ -73,6 +82,11 @@ fun PickPad(
   blind: Boolean = false,
   /** Whether the header counts sets. */
   showSetCount: Boolean = true,
+  /** The pick in hand, drawn in the keyway. */
+  tool: PickTool = PickTool.Hook,
+  /** Swaps the pick, or null if this lock has only a hook: then there is no switch. */
+  onTool: ((PickTool) -> Unit)? = null,
+  onToolSwitchPlaced: (Rect) -> Unit = {},
 ) {
   val pulse = remember { Animatable(0f) }
   // Flash only on a pulse that arrives while shown: the count survives rotation, and a rebuilt
@@ -90,8 +104,19 @@ fun PickPad(
   val description = stringResource(R.string.cd_pick_pad)
   Panel(modifier.systemGestureExclusion().semantics { contentDescription = description }) {
     Column(Modifier.padding(horizontal = PickPadInset, vertical = 8.dp)) {
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.pick_title), style = BenchType.Label, color = BenchColors.Dim)
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        if (onTool != null) {
+          Row(
+            Modifier.width(ToolSwitchWidth).onGloballyPositioned { onToolSwitchPlaced(it.boundsInWindow()) },
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            PickTool.entries.forEach { option ->
+              BenchButton(stringResource(option.label), selected = option == tool) { onTool(option) }
+            }
+          }
+        } else {
+          Text(stringResource(R.string.pick_title), style = BenchType.Label, color = BenchColors.Dim)
+        }
         if (showSetCount) {
           Text(
             stringResource(R.string.shear_line_count, setCount, count),
@@ -114,7 +139,13 @@ fun PickPad(
           drawShearLine(scale.y(geometry.shearY), opened, pulse.value)
         }
         val z = pickZ()
-        if (keyway.contains(z)) drawPick(size.width * keyway.depthAt(z), scale.y(pickY()), scale)
+        val rake = geometry.rake
+        if (!keyway.contains(z)) return@Canvas
+        if (tool == PickTool.Rake && rake != null) {
+          drawRake(z, pickY(), geometry, keyway, rake, scale)
+        } else {
+          drawPick(size.width * keyway.depthAt(z), scale.y(pickY()), scale)
+        }
       }
     }
   }
@@ -140,6 +171,54 @@ private fun DrawScope.drawPick(tipX: Float, tipY: Float, scale: StackScale) {
   drawLine(BenchColors.Nickel, Offset(tipX, shaftY), Offset(tipX, tipY), strokeWidth = stroke, cap = StrokeCap.Round)
   drawCircle(BenchColors.Text, radius = 2.dp.toPx(), center = Offset(tipX, tipY))
 }
+
+/**
+ * The rake, in from the mouth on the left with its lead peak at [tipZ], [tipY]: the wave of
+ * its blade and the shank behind it. It is drawn as the lever it is, pivoting on the mouth of
+ * the keyway, so each hump sits where it really is under the pins.
+ */
+private fun DrawScope.drawRake(tipZ: Float, tipY: Float, geometry: LockGeometry, keyway: Keyway, rake: RakeProfile, scale: StackScale) {
+  val outward = if (keyway.mouthZ > keyway.backZ) 1f else -1f
+  val span = (keyway.mouthZ - keyway.backZ) * outward
+  val reach = (geometry.pickFulcrumZ - tipZ) * outward
+  val contact = geometry.pinRestY - RAKE_GAP
+  val lift = tipY - contact
+  // Canvas X of a point [behind] the lead peak: the mouth is the left edge, the back wall the right.
+  fun x(behind: Float) = size.width * ((keyway.mouthZ - tipZ) * outward - behind) / span
+  fun y(behind: Float): Float {
+    val lever = if (reach > 0.02f) (1f - behind / reach).coerceAtLeast(0f) else 1f
+    return scale.y(contact + lift * lever + rake.heightAt(behind))
+  }
+  val blade = Path()
+  var behind = rake.front
+  blade.moveTo(x(behind), y(behind))
+  val shankFrom = (rake.peaks - 1) * rake.pitch + rake.pitch / 2f
+  while (behind < shankFrom) {
+    behind = (behind + rake.pitch / 12f).coerceAtMost(shankFrom)
+    blade.lineTo(x(behind), y(behind))
+  }
+  // The shank runs out through the mouth and off the pad.
+  val out = (keyway.mouthZ - tipZ) * outward + span * 0.1f
+  if (out > shankFrom) {
+    blade.lineTo(x(shankFrom + rake.pitch / 4f), y(shankFrom + rake.pitch / 4f))
+    blade.lineTo(x(out), y(out))
+  }
+  drawPath(blade, BenchColors.Nickel, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+  drawCircle(BenchColors.Text, radius = 2.dp.toPx(), center = Offset(x(0f), y(0f)))
+}
+
+/** Daylight between the rake's lead peak and a pin at rest: PickMotion's PICK_GAP. */
+private const val RAKE_GAP = 0.002f
+
+/** Room for the two tool buttons in the header. */
+private val ToolSwitchWidth = 148.dp
+
+/** The name a pick goes by on its button. */
+val PickTool.label: Int
+  get() = when (this) {
+    PickTool.Hook -> R.string.tool_hook
+    PickTool.Rake -> R.string.tool_rake
+  }
 
 /** Model Y to canvas Y. The stacks are drawn at their true proportions. */
 private class StackScale(geometry: LockGeometry, private val drawable: Float) {
