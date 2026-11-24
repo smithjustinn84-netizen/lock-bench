@@ -98,12 +98,21 @@ class LockBenchViewModel(
   private var infoLoad: Job? = null
 
   init {
-    // The bench opens as it was left: lock, camera and hints. Nothing loads until that is known,
+    // The bench opens as it was left: lock, camera, hints, hands and ghost. Nothing loads until that is known,
     // so the trainer never flashes up first.
     viewModelScope.launch {
       val saved = prefs.load()
       sandboxHints = saved.hints
-      _uiState.update { it.copy(lock = saved.lock, preset = saved.preset, hints = saved.hints, restored = true) }
+      _uiState.update {
+        it.copy(
+          lock = saved.lock,
+          preset = saved.preset,
+          hints = saved.hints,
+          swapHands = saved.swapHands,
+          ghost = saved.ghost,
+          restored = true,
+        )
+      }
       loadModelInfo(saved.lock)
     }
   }
@@ -254,7 +263,11 @@ class LockBenchViewModel(
     if (_uiState.value.game == null) viewModelScope.launch { prefs.saveHints(hints) }
   }
 
-  fun onHandsSwapped() = _uiState.update { it.copy(swapHands = !it.swapHands) }
+  fun onHandsSwapped() {
+    val swapHands = !_uiState.value.swapHands
+    _uiState.update { it.copy(swapHands = swapHands) }
+    viewModelScope.launch { prefs.saveSwapHands(swapHands) }
+  }
 
   fun onReset() = act { reset() }
 
@@ -272,6 +285,8 @@ class LockBenchViewModel(
     val ghost = !_uiState.value.ghost
     _uiState.update { it.copy(ghost = ghost) }
     act { setGhost(ghost) }
+    // A round turns the ghost off for itself; seeing through the reveal after one is not kept.
+    if (_uiState.value.game == null) viewModelScope.launch { prefs.saveGhost(ghost) }
   }
 
   fun onPresetSelected(preset: CameraPreset) {

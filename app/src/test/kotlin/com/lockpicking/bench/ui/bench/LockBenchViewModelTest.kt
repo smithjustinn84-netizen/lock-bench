@@ -72,10 +72,18 @@ class LockBenchViewModelTest {
     var lock: LockModel? = null
     var preset: CameraPreset? = null
     var hints: Boolean? = null
+    var swapHands: Boolean? = null
+    var ghost: Boolean? = null
 
     override suspend fun load(): SavedBench {
       val defaults = SavedBench()
-      return SavedBench(lock ?: defaults.lock, preset ?: defaults.preset, hints ?: defaults.hints)
+      return SavedBench(
+        lock ?: defaults.lock,
+        preset ?: defaults.preset,
+        hints ?: defaults.hints,
+        swapHands ?: defaults.swapHands,
+        ghost ?: defaults.ghost,
+      )
     }
     override suspend fun saveLock(lock: LockModel) {
       this.lock = lock
@@ -85,6 +93,12 @@ class LockBenchViewModelTest {
     }
     override suspend fun saveHints(hints: Boolean) {
       this.hints = hints
+    }
+    override suspend fun saveSwapHands(swapHands: Boolean) {
+      this.swapHands = swapHands
+    }
+    override suspend fun saveGhost(ghost: Boolean) {
+      this.ghost = ghost
     }
   }
 
@@ -532,6 +546,30 @@ class LockBenchViewModelTest {
     val next = viewModel()
     assertEquals(CameraPreset.Isometric, next.uiState.value.preset)
     assertFalse(next.uiState.value.hints)
+  }
+
+  @Test
+  fun `swapped hands and the ghost are remembered for the next launch`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onHandsSwapped()
+    vm.onGhostToggled()
+    advanceUntilIdle()
+    assertEquals(true, prefs.swapHands)
+    assertEquals(true, prefs.ghost)
+
+    val next = bound(viewModel())
+    assertTrue(next.uiState.value.swapHands)
+    assertTrue(next.uiState.value.ghost)
+  }
+
+  @Test
+  fun `a ghost toggled after a blind round is not saved`() = runTest(dispatcher) {
+    val vm = bound(viewModel())
+    vm.onGameStarted(GameTier.Apprentice)
+    pickOpenByHand(vm)
+    vm.onGhostToggled()
+    advanceUntilIdle()
+    assertNull(prefs.ghost)
   }
 
   @Test
