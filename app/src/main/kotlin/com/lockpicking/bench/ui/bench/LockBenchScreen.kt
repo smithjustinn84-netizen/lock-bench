@@ -288,7 +288,7 @@ fun LockBenchScreen(
         if (game != null) {
           GameStatusBlock(game, state.lock, state.setCount, state.pinCount, gameElapsedMillis, Modifier.weight(1f).padding(end = 12.dp))
         } else {
-          StatusBlock(state.status(), Modifier.weight(1f).padding(end = 12.dp))
+          StatusBlock(state.status(), state.swapHands, Modifier.weight(1f).padding(end = 12.dp))
           // Pin lift in millimetres and the plug's angle: not for a blind round.
           LiveStatsPill(state.modelInfo, meter, telemetry)
         }

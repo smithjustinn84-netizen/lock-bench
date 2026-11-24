@@ -9,6 +9,7 @@
     <string name="status_overset_hint">Key pin is past the shear line. Ease the wrench and it slips back.</string>
     <string name="status_locked">LOCKED</string>
     <string name="status_locked_hint">Left thumb: pull down. Right thumb: find a pin and lift.</string>
+    <string name="status_locked_hint_swapped">Right thumb: pull down. Left thumb: find a pin and lift.</string>
     <string name="status_seized">TOO MUCH TENSION</string>
     <string name="status_seized_hint">The binding pin is seized. Ease the wrench until it moves.</string>
     <string name="status_ease_off">EASE OFF</string>

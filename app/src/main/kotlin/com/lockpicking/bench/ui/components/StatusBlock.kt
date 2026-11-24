@@ -11,9 +11,12 @@ import com.lockpicking.bench.ui.bench.BenchStatus
 import com.lockpicking.bench.ui.theme.BenchColors
 import com.lockpicking.bench.ui.theme.BenchType
 
-/** One line telling the user what the lock is doing and what to do next. */
+/**
+ * One line telling the user what the lock is doing and what to do next. [swapHands] says the
+ * wrench is under the right thumb, which the hint has to name.
+ */
 @Composable
-fun StatusBlock(status: BenchStatus, modifier: Modifier = Modifier) {
+fun StatusBlock(status: BenchStatus, swapHands: Boolean, modifier: Modifier = Modifier) {
   val headline: String
   val hint: String
   val tint: Color
@@ -30,7 +33,7 @@ fun StatusBlock(status: BenchStatus, modifier: Modifier = Modifier) {
     }
     BenchStatus.Locked -> {
       headline = stringResource(R.string.status_locked)
-      hint = stringResource(R.string.status_locked_hint)
+      hint = stringResource(if (swapHands) R.string.status_locked_hint_swapped else R.string.status_locked_hint)
       tint = BenchColors.Text
     }
     BenchStatus.Seized -> {
