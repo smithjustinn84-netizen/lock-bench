@@ -359,7 +359,7 @@ class BenchSimulation(
       if (!parked) pick.ride(0f)
       return
     }
-    // A blade that is sliding cannot lean on a pin: only one that is nearly still turns the plug back.
+    // A blade that is sliding cannot lean on a pin: only one that is nearly still forces a serration's groove.
     val speed = abs(toZ - fromZ) / dt
     val authority = 1f - smooth((speed - STEADY_SPEED) / (SLIDING_SPEED - STEADY_SPEED))
     val step = dt / RAKE_STEPS
@@ -458,7 +458,7 @@ class BenchSimulation(
     }
     // An earlier pin in this step may have set and changed what this one is up against.
     at = min(at, lock.reach(i, at, blade.dt, wedge = true, authority = blade.authority))
-    lock.press(i, at, wanted = blade.want * k + o, alone = false, authority = blade.authority)
+    lock.press(i, at, wanted = blade.want * k + o, alone = false)
   }
 
   private fun runNudge(dt: Float) {

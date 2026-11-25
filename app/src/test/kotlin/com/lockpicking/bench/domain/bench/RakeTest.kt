@@ -163,14 +163,57 @@ class RakeTest {
   }
 
   @Test
-  fun `rocking a peak under each spool finishes what scrubbing could not`() {
+  fun `rocking a peak under a spool does not set it either`() {
     val sim = bench(trainerGeometry)
     sim.pull(EASED)
     sim.scrub(seconds = 4f)
     assertFalse(sim.snapshot().opened)
     sim.rock(times = 6)
-    assertTrue(sim.snapshot().opened)
-    assertTrue(events.any { it is LockEvent.CounterRotation && it.step == LockMechanics.COUNTER_ROTATION_STEPS })
+    assertSpoolsUnset(sim, trainerGeometry)
+    assertFalse(events.any { it is LockEvent.CounterRotation })
+  }
+
+  @Test
+  fun `no way of working the rake sets a spool, whatever the wrench is doing`() {
+    for (torque in listOf(0.10f, EASED, 0.20f, 0.30f, FIRM)) {
+      for (hz in listOf(0.02f, 0.05f, 0.1f, 0.25f)) {
+        val sim = bench(trainerGeometry)
+        sim.pull(torque)
+        // A crawl along the keyway, the blade steady enough to lean on every pin it passes.
+        sim.scrub(seconds = 30f, hz = hz, low = 0.020f, high = 0.075f)
+        assertSpoolsUnset(sim, trainerGeometry, "torque $torque at $hz strokes a second")
+      }
+    }
+  }
+
+  @Test
+  fun `a rake held still under a spool and lifted does not set it`() {
+    for (order in permutations(4)) {
+      val sim = bench(trainerGeometry, order)
+      sim.pull(EASED)
+      for (pin in listOf(1, 2, 1, 2)) {
+        for (frame in 0 until ROCK_FRAMES) {
+          sim.movePick(sim.keyway.depthOf(pin), 0.080f * triangle(frame.toFloat() / ROCK_FRAMES, 1f))
+          sim.advance(FRAME)
+        }
+      }
+      assertSpoolsUnset(sim, trainerGeometry, "order $order")
+    }
+  }
+
+  @Test
+  fun `the aluminium lock's spools hold out against rocking`() {
+    val sim = bench(american1100Geometry)
+    sim.pull(EASED)
+    sim.rock(times = 30)
+    assertSpoolsUnset(sim, american1100Geometry)
+  }
+
+  private fun assertSpoolsUnset(sim: BenchSimulation, geometry: LockGeometry, message: String = "") {
+    assertFalse(message, sim.snapshot().opened)
+    for ((i, pin) in geometry.pinSpecs.withIndex()) {
+      if (pin.spool) assertEquals("$message pin ${pin.number}", PinState.Resting, sim.readout.state(i))
+    }
   }
 
   // ── Serrated drivers ────────────────────────────────────────────────────────────────────────
@@ -207,14 +250,6 @@ class RakeTest {
     sim.rock(times = 1)
     assertEquals(PinState.Set, sim.readout.state(pin))
     assertEquals(listOf(1, 2, 3), events.filterIsInstance<LockEvent.SerrationClick>().filter { it.pin == pin }.map { it.notch })
-  }
-
-  @Test
-  fun `rocking pin by pin opens the aluminium lock`() {
-    val sim = bench(american1100Geometry)
-    sim.pull(EASED)
-    sim.rock(times = 20)
-    assertTrue(sim.snapshot().opened)
   }
 
   // ── The tool in hand ────────────────────────────────────────────────────────────────────────

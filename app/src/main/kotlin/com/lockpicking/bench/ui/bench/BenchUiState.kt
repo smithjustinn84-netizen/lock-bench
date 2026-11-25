@@ -96,8 +96,8 @@ sealed interface BenchStatus {
   /** The pick is on a serrated driver whose groove has caught: it clicked, but it is not set. */
   data class Caught(val pinNumber: Int) : BenchStatus
 
-  /** The plug has dropped into a false set and is hanging on this spool. */
-  data class FalseSet(val pinNumber: Int) : BenchStatus
+  /** The plug has dropped into a false set and is hanging on this spool. With [rake] in hand it will not come out of it. */
+  data class FalseSet(val pinNumber: Int, val rake: Boolean = false) : BenchStatus
 
   /** Tension on and picking; [bindingPinNumber] is null when no pin is named. */
   data class Picking(val setCount: Int, val pinCount: Int, val bindingPinNumber: Int?) : BenchStatus
@@ -120,7 +120,7 @@ fun BenchUiState.status(): BenchStatus = when {
     if (serrated) BenchStatus.Caught(blockedPin + 1) else BenchStatus.EaseOff(blockedPin + 1)
   }
 
-  falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1)
+  falseSetPin >= 0 -> BenchStatus.FalseSet(falseSetPin + 1, rake = tool == PickTool.Rake)
 
   else -> BenchStatus.Picking(setCount, pinCount, bindingPin.takeIf { it >= 0 }?.plus(1))
 }

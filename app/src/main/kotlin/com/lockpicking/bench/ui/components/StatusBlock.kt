@@ -89,7 +89,10 @@ fun StatusBlock(status: BenchStatus, swapHands: Boolean, modifier: Modifier = Mo
 
     is BenchStatus.FalseSet -> {
       headline = stringResource(R.string.status_false_set)
-      hint = stringResource(R.string.status_false_set_hint, status.pinNumber)
+      hint = stringResource(
+        if (status.rake) R.string.status_false_set_rake_hint else R.string.status_false_set_hint,
+        status.pinNumber,
+      )
       tint = BenchColors.Brass
     }
 

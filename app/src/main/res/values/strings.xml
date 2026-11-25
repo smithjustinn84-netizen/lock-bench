@@ -19,6 +19,7 @@
     <string name="status_caught_hint" tools:ignore="PluralsCandidate">A serration on pin %1$d has caught. It is not set: ease the wrench and keep lifting.</string>
     <string name="status_false_set">FALSE SET</string>
     <string name="status_false_set_hint">The plug is hanging on pin %1$d\'s spool. Lift it and ease the wrench.</string>
+    <string name="status_false_set_rake_hint">The plug is hanging on pin %1$d\'s spool. A rake cannot set a spool: switch to the hook.</string>
     <string name="status_picking">%1$d / %2$d SET</string>
     <string name="status_binding_hint">Pin %1$d is binding. Slide the pick under it and lift.</string>
 
@@ -85,7 +86,7 @@
     <string name="guide_serrated_title">SERRATED PINS</string>
     <string name="guide_serrated_body">A serrated driver has fine grooves, and each one clicks on the shear line like a set that is not one. Pull hard and a groove catches. Keep the tension light and lift through the clicks.</string>
     <string name="guide_rake_title">RAKING</string>
-    <string name="guide_rake_body">A rake is a wavy blade scrubbed in and out under every pin at once, with a light wrench. Plain pins set as its humps pass. A spool only lets the plug drop into a false set, and a serrated pin only clicks: slow right down and rock one hump under the pin, or switch to the hook.</string>
+    <string name="guide_rake_body">A rake is a wavy blade scrubbed in and out under every pin at once, with a light wrench. Plain pins set as its humps pass. A rake never sets a spool: the plug drops into a false set and it takes the hook to get out. A serrated pin only clicks: slow right down and rock one hump under it, or switch to the hook.</string>
     <string name="guide_more">The full primer, with a glossary, is docs/LOCKSPORT.md in the project.</string>
 
     <!-- Tension wrench -->

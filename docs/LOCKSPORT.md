@@ -92,10 +92,10 @@ Security pins are made to stop it:
 | Pin | What a rake does to it |
 | --- | --- |
 | **Standard** | Sets as a hump passes under it. |
-| **Spool** | Gets knocked about without ever squaring up to the plug, so it does not set. Once the other pins have gone the plug drops into a false set, and from there the spool has to be eased up over its shoulder while the plug turns back. A passing hump cannot do that. |
+| **Spool** | Gets knocked about without ever squaring up to the plug, so it does not set. Once the other pins have gone the plug drops into a false set, and from there the spool has to be eased up over its shoulder while the plug turns back. A rake's blade cannot do that, sliding or still: a spool never sets to a rake. |
 | **Serrated** | Clicks on its first groove every pass and falls back. Each groove has to be pushed through steadily. |
 
-So raking gets you as far as the security pins and no further. From there you slow down until the blade is almost still and **rock** one hump up and down under the pin, which is single-pin picking with the wrong tool, or you swap to the hook. In the app the **HOOK | RAKE** switch is on the pick pad, and swapping keeps your tension and your sets.
+So raking gets you as far as the security pins and no further. A serrated pin you can still get with the rake: slow down until the blade is almost still and **rock** one hump up and down under it, which is single-pin picking with the wrong tool. A spool you cannot: swap to the hook. In the app the **HOOK | RAKE** switch is on the pick pad, and swapping keeps your tension and your sets.
 
 ## The locks on the bench
 

@@ -27,6 +27,7 @@ import kotlin.math.min
  * A hook holds one pin at a time, and [press] lets go of every other pin unless told not to.
  * A rake holds several: it presses with `alone = false`, which also changes what a push can do
  * (see [press]), and it [reach]es with a wedge's speed and a sliding blade's lack of authority.
+ * It never sets a spool: that takes the hook.
  *
  * Pins are indexed 0-based here; [PinSpec.number] is the 1-based name used in the model.
  */
@@ -126,9 +127,10 @@ class LockMechanics(
   private val setThisPush = BooleanArray(pins.size)
 
   /**
-   * Spools a rake is knocking about. A spool only squares up to the plug under a steady push:
-   * thrown up by a passing hump it rattles in its chamber, and all the plug finds of it is its
-   * waist. So it neither stops the plug nor sets, and stays that way until it has come to rest.
+   * Spools a rake is knocking about. A spool only squares up to the plug under the steady push
+   * of a hook: on a rake's blade, sliding or not, it rattles in its chamber, and all the plug
+   * finds of it is its waist. So it neither stops the plug nor sets, and stays that way until
+   * it has come to rest. A rake never sets a spool.
    */
   private val rattling = BooleanArray(pins.size)
 
@@ -198,8 +200,8 @@ class LockMechanics(
   fun liftRate(pin: Int, wedge: Boolean = false, authority: Float = 1f): Float = when {
     pinStates[pin] != PinState.Resting -> LIFT_RATE_FREE
 
-    // Turning the plug back takes a steady push: a blade that is sliding has none to give.
-    turningPlugBack(pin) -> LIFT_RATE_SHOULDER * authority
+    // Turning the plug back takes a tip under that one pin: a rake's blade cannot do it at all.
+    turningPlugBack(pin) -> if (wedge) 0f else LIFT_RATE_SHOULDER
 
     onGrooveLip(pin) -> LIFT_RATE_GROOVE * max(GROOVE_RATE_FLOOR, 1f - torque / T_SERRATION) * authority
 
@@ -215,8 +217,8 @@ class LockMechanics(
    * immediate: the pick just gets out of the way.
    *
    * [wedge] is a rake's ramp driving under the pin: a binding pin goes up far faster than a
-   * hook can push it. [authority], 0..1, is how steadily the pick is pushing: forcing the plug
-   * back, over a spool's shoulder or a serration's groove, goes only as fast as that allows.
+   * hook can push it, but it cannot force the plug back over a spool's shoulder. [authority],
+   * 0..1, is how steadily the pick is pushing: a serration's groove gives only as fast as that allows.
    */
   fun reach(pin: Int, wanted: Float, dt: Float, wedge: Boolean = false, authority: Float = 1f): Float {
     val current = keyLifts[pin]
@@ -321,26 +323,24 @@ class LockMechanics(
    * [alone] is a hook: it is under this pin and no other, so every other pin is let go.
    *
    * With [alone] false this is one of several pins riding a rake, and three things differ:
-   * - A spool or a serrated driver sets only by being carried up through the shear line while
-   *   it is the one binding, which is what takes it over its shoulder or its grooves. One that
-   *   is already above the line when its turn comes holds the plug on its key pin until it has
-   *   dropped back. A plain driver has nothing to get over, and sets as it would for a hook.
+   * - A spool does not set at all: it is only knocked about (see [rattling]), and once the plug
+   *   is in a false set its shoulder stops the blade. That takes a hook.
+   * - A serrated driver sets only by being carried up through the shear line while it is the
+   *   one binding, which is what takes it over its grooves. One that is already above the line
+   *   when its turn comes holds the plug on its key pin until it has dropped back. A plain
+   *   driver has nothing to get over, and sets as it would for a hook.
    * - At or below [T_EASED] the plug gives to a passing peak: the peak that set a pin can carry
    *   it on up without oversetting it, and so can any peak after. Above that, the push that set
    *   it oversets it as a hook's would, and a set pin is solid at the shear line.
    * - A set pin is done with its push as soon as its key pin is back under the shear line.
-   * - A spool pushed with less than [SEAT_AUTHORITY] is only knocked about: see [rattling].
-   *
-   * [authority], 0..1, is how steadily the rake is pushing: 1 when it is still, 0 when it is sliding.
    */
-  fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true, authority: Float = 1f) {
+  fun press(pin: Int, lift: Float, wanted: Float = lift, alone: Boolean = true) {
     if (opened || pin !in pins.indices) return
     take(pin, alone)
     val rake = !alone
     if (pins[pin].spool && pinStates[pin] == PinState.Resting) {
-      val knocked = rake && authority < SEAT_AUTHORITY
-      if (knocked != rattling[pin]) {
-        rattling[pin] = knocked
+      if (rake != rattling[pin]) {
+        rattling[pin] = rake
         refreshPlug(pin)
       }
     }
@@ -420,9 +420,7 @@ class LockMechanics(
     // Every groove is below the shear line, so this stretch of the push is the one that crosses them.
     if (wasBinding && pins[pin].serrated) reportSerrations(pin, before, keyLifts[pin])
     refreshPlug(pin)
-    // A rake's pin has to have been the binder on the way up: the plug turning on to it as it arrives is not a set.
-    val mayCount = alone || !security || wasBinding
-    if (target >= shear && bindingPin == pin && mayCount) {
+    if (target >= shear && bindingPin == pin && mayCount(pin, alone, wasBinding)) {
       setPin(pin, target, shear)
       return
     }
@@ -432,6 +430,14 @@ class LockMechanics(
     if (stop == Limit.Serration) noteBlock(pin, wanted, limit, stop)
     noteTexture(pin, before, wasBinding)
   }
+
+  /**
+   * Whether [pin] arriving at the shear line as the binder is a set. For a hook, [alone], always.
+   * A rake never sets a spool, wherever the plug finds it, and its serrated pin has to have been
+   * the binder on the way up: the plug turning on to it as it arrives is not a set.
+   */
+  private fun mayCount(pin: Int, alone: Boolean, wasBinding: Boolean): Boolean =
+    alone || (!pins[pin].spool && (!pins[pin].serrated || wasBinding))
 
   /** [pin] reaches the shear line on the binding edge and sets; with the last one the lock opens. */
   private fun setPin(pin: Int, target: Float, shear: Float) {
@@ -768,9 +774,6 @@ class LockMechanics(
 
     /** How fast a spool climbs its shoulder against the plug: about a third of a second for it all. */
     const val LIFT_RATE_SHOULDER = 0.012f
-
-    /** A rake pushing less steadily than this only knocks a spool about. */
-    const val SEAT_AUTHORITY = 0.5f
 
     /** How fast a rake's ramp wedges a binding pin up, under light and heavy torque. */
     const val WEDGE_RATE_LIGHT = 3f

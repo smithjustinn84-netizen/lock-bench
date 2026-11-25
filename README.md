@@ -79,11 +79,11 @@ A rake is a wavy blade that goes under every pin at once. Hold a light wrench, s
 | What is in the lock | What the rake does |
 | --- | --- |
 | **Plain pins** | Each sets as a hump carries it up through the shear line. The Master No. 3 opens in a few strokes. |
-| **Spools** | Knocked about by a passing hump, a spool never squares up to the plug, so it does not set. When the plain pins have gone the plug drops into a false set and the spool holds the blade down. |
+| **Spools** | Knocked about by a passing hump, a spool never squares up to the plug, so it does not set. When the plain pins have gone the plug drops into a false set and the spool holds the blade down. A rake never sets a spool, however slowly you work it. |
 | **Serrated drivers** | The first groove clicks on every pass and the pin falls back. Nothing sets. |
 | **Firm tension** | The peak that sets a pin throws it past the line and it jams until you ease off. Raking only works in the wrench's light band. |
 
-To get through a spool or a serrated pin, stop scrubbing: hold one hump nearly still under the pin and rock it gently up and down, the way you would work it with the hook. Or swap to the hook. The trainer always ends in a false set this way, and the American 1100 gives the rake nothing but clicks.
+To get through a serrated pin, stop scrubbing: hold one hump nearly still under the pin and rock it gently up and down, the way you would work it with the hook. Rocking does nothing for a spool: for that, swap to the hook. The trainer always ends in a false set this way, and the American 1100 gives the rake nothing but clicks.
 
 A tap on the pad does nothing while the rake is in: it is not aimed at a pin.
 
